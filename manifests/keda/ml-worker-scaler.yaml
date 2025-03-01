@@ -1,39 +1,55 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: benthos-ml-worker-scaler
+  name: ml-worker-scaler
   namespace: default
 spec:
   scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
     name: benthos-ml-worker
-  minReplicaCount: 1
-  maxReplicaCount: 10
   pollingInterval: 15
   cooldownPeriod: 30
+  minReplicaCount: 1
+  maxReplicaCount: 20
   triggers:
-    - type: rabbitmq
-      metadata:
-        queueName: ml_inference_requests
-        mode: QueueLength
-        value: "5"
-        protocol: amqp
-        host: rabbitmq.default.svc:5672
-        queueLength: "10"
-      authenticationRef:
-        name: rabbitmq-auth
+  - type: rabbitmq
+    metadata:
+      mode: QueueLength
+      queueName: ml_requests
+      hostFromEnv: RABBITMQ_HOST
+      protocol: amqp
+      value: "5"  # Scale up when there are 5 or more messages in the queue
+    authenticationRef:
+      name: rabbitmq-trigger-auth
 ---
 apiVersion: keda.sh/v1alpha1
 kind: TriggerAuthentication
 metadata:
-  name: rabbitmq-auth
+  name: rabbitmq-trigger-auth
+  namespace: default
 spec:
   secretTargetRef:
-    - parameter: username
-      name: rabbitmq-credentials
-      key: username
-    - parameter: password
-      name: rabbitmq-credentials
-      key: password
+  - parameter: host
+    name: rabbitmq-connection
+    key: host
+  - parameter: username
+    name: rabbitmq-connection
+    key: username
+  - parameter: password
+    name: rabbitmq-connection
+    key: password
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rabbitmq-connection
+  namespace: default
+type: Opaque
+stringData:
+  host: amqp://rabbitmq.data-infra.svc.cluster.local:5672
+  username: user
+  password: your-secure-password
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
@@ -43,6 +59,7 @@ metadata:
 spec:
   scaleTargetRef:
     name: benthos-ml-worker
+    kind: Deployment
   minReplicaCount: 1
   maxReplicaCount: 10
   pollingInterval: 15
@@ -63,6 +80,7 @@ metadata:
 spec:
   scaleTargetRef:
     name: ml-inference
+    kind: Deployment
   minReplicaCount: 1
   maxReplicaCount: 5
   pollingInterval: 15
