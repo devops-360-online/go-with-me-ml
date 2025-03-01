@@ -47,10 +47,14 @@ docs/
 │   ├── helm-charts.md        # Helm configuration
 │   └── scaling.md            # Scaling strategies
 │
-└── 04-operations/
-    ├── monitoring.md         # Monitoring setup
-    ├── alerting.md           # Alert configuration
-    └── troubleshooting.md    # Common issues and solutions
+├── 04-operations/
+│   ├── monitoring.md         # Monitoring setup
+│   ├── alerting.md           # Alert configuration
+│   └── troubleshooting.md    # Common issues and solutions
+│
+├── images/                   # Documentation images
+│
+└── ORGANIZATION.md           # Repository organization guide
 ```
 
 ## Key Features

@@ -2,6 +2,76 @@
 
 A scalable, configuration-driven architecture for ML inference workloads on Kubernetes with token-based quota management.
 
+## Project Overview
+
+This repository contains a complete architecture for deploying and managing machine learning inference workloads on Kubernetes. It uses a configuration-driven approach with Benthos for API gateway, message processing, and results collection, along with token-based quota management for resource tracking.
+
+## Repository Structure
+
+```
+.
+├── config/                    # Configuration files
+│   ├── benthos/               # Benthos configurations
+│   │   ├── api-gateway/       # API Gateway specific configs
+│   │   ├── ml-worker/         # ML Worker specific configs
+│   │   ├── results-collector/ # Results Collector specific configs
+│   │   └── common/            # Shared Benthos components
+│   ├── helm/                  # Helm and Helmfile configurations
+│   └── schema.sql             # Database schema
+│
+├── docs/                      # Documentation
+│   ├── 01-architecture/       # Architecture documentation
+│   ├── 02-core-components/    # Component-specific documentation
+│   ├── images/                # Documentation images
+│   ├── ORGANIZATION.md        # Repository organization guide
+│   └── README.md              # Documentation overview
+│
+├── manifests/                 # Kubernetes manifests
+│   ├── api-service/           # API service manifests
+│   ├── benthos/               # Benthos component manifests
+│   ├── keda/                  # KEDA ScaledObject definitions
+│   └── ml-service/            # ML service manifests
+│
+└── src/                       # Source code
+    ├── api-service/           # Node.js API service
+    ├── ml-inference/          # Python ML service
+    └── scripts/               # Utility scripts
+```
+
+## Key Features
+
+- **Token-Based Quota Management**: Accurately track and limit resource usage based on token consumption
+- **Configuration-Driven Architecture**: Use Benthos as a configuration-driven tool to connect system components
+- **Autoscaling with KEDA**: Scale components based on queue length, token consumption, and resource utilization
+- **Separation of Concerns**: Each component has a well-defined role within the architecture
+- **Observability**: Built-in logging, metrics, and monitoring integrations
+
+## Getting Started
+
+See the [documentation](./docs/README.md) for a complete overview of the architecture, component details, and deployment instructions.
+
+## Components
+
+- **API Gateway**: Receives HTTP requests, validates them, and forwards them to RabbitMQ
+- **ML Worker**: Processes inference requests from RabbitMQ, calls ML services, and publishes results
+- **Results Collector**: Consumes results from RabbitMQ and stores them in PostgreSQL
+- **ML Service**: Runs the actual machine learning model inference
+- **KEDA**: Provides autoscaling based on metrics from RabbitMQ and other sources
+
+## Deployment
+
+The architecture is designed to be deployed on Kubernetes. See the [deployment documentation](./docs/03-deployment/kubernetes-setup.md) for details.
+
+```bash
+# Apply the Benthos components with Kustomize
+kubectl apply -k manifests/benthos/
+
+# Apply other components
+kubectl apply -f manifests/ml-service/
+kubectl apply -f manifests/api-service/
+kubectl apply -f manifests/keda/
+```
+
 ## Architecture Overview
 
 This architecture enables high-throughput, scalable ML inference with sophisticated quota management, automatic scaling, and minimal custom code.
@@ -273,46 +343,6 @@ For detailed documentation on each component:
 - [Redis Documentation](docs/02-core-components/redis/concepts.md)
 - [KEDA Documentation](docs/02-core-components/keda/concepts.md)
 - [Architecture Overview](docs/01-architecture/overview.md)
-
-## Getting Started
-
-### Prerequisites
-
-- Kubernetes cluster
-- Helm 3+
-- kubectl
-
-### Installation
-
-```bash
-# Add Helm repositories
-helm repo add bitnami https://charts.bitnami.com/bitnami
-helm repo add kedacore https://kedacore.github.io/charts
-helm repo update
-
-# Install RabbitMQ
-helm install rabbitmq bitnami/rabbitmq -f helm-values/rabbitmq-values.yaml
-
-# Install PostgreSQL
-helm install postgresql bitnami/postgresql -f helm-values/postgresql-values.yaml
-
-# Install Redis
-helm install redis bitnami/redis -f helm-values/redis-values.yaml
-
-# Install KEDA
-helm install keda kedacore/keda -n keda --create-namespace
-
-# Deploy Benthos components
-kubectl apply -f k8s/benthos/
-```
-
-### Configuration
-
-The system is primarily configured through:
-
-1. **Benthos YAML files**: Define data flows and transformations
-2. **Kubernetes manifests**: Define deployment parameters
-3. **KEDA ScaledObjects**: Define scaling behaviors
 
 ## License
 
