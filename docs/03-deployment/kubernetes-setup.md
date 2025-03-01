@@ -44,13 +44,17 @@ kubectl create secret generic redis-credentials \
   --from-literal=url=redis://redis:6379
 
 # Create PostgreSQL credentials secret
+# IMPORTANT: Replace 'your-secure-password' with a strong, unique password
 kubectl create secret generic postgres-credentials \
-  --from-literal=dsn=postgres://postgres:password@postgresql:5432/mlservice
+  --from-literal=dsn=postgres://postgres:your-secure-password@postgresql:5432/mlservice
 
 # Create RabbitMQ credentials secret
+# IMPORTANT: Replace with your actual RabbitMQ credentials
 kubectl create secret generic rabbitmq-credentials \
-  --from-literal=url=amqp://user:password@rabbitmq:5672/
+  --from-literal=url=amqp://user:your-secure-password@rabbitmq:5672/
 ```
+
+> **⚠️ Security Warning**: Never use default or example passwords in production. Generate strong, unique passwords and store them securely. Consider using a secret management solution like HashiCorp Vault or AWS Secrets Manager for production deployments.
 
 ### 3. Deploy Benthos Components
 

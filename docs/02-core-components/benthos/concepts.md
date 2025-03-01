@@ -165,7 +165,7 @@ pipeline:
     # Store request in PostgreSQL with token estimation
     - sql:
         driver: postgres
-        dsn: postgres://user:password@postgres:5432/ml_inference
+        dsn: postgres://user:${DB_PASSWORD}@postgres:5432/ml_inference
         query: >
           INSERT INTO requests 
           (request_id, user_id, prompt, estimated_tokens, status) 
@@ -248,7 +248,7 @@ pipeline:
     # Update PostgreSQL with actual token usage
     - sql:
         driver: postgres
-        dsn: postgres://user:password@postgres:5432/ml_inference
+        dsn: postgres://user:${DB_PASSWORD}@postgres:5432/ml_inference
         query: >
           UPDATE requests 
           SET 

@@ -24,11 +24,20 @@ spec:
         - name: PORT
           value: "8080"
         - name: POSTGRES_DSN
-          value: postgres://postgres:postgres@postgresql:5432/mlservice
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: dsn
         - name: REDIS_URL
-          value: redis://redis:6379
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: url
         - name: RABBITMQ_URL
-          value: amqp://user:password@rabbitmq:5672/
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-credentials
+              key: url
         - name: LOG_LEVEL
           value: info
         resources:

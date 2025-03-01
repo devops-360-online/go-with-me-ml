@@ -105,4 +105,99 @@ sql_store_token_usage:
       - "${! json(\"prompt_tokens\") }"
       - "${! json(\"completion_tokens\") }"
       - "${! json(\"total_tokens\") }"
-      - "${! json(\"model\") }" 
+      - "${! json(\"model\") }"
+
+# Common SQL configurations for Benthos components
+
+# ====================
+# Processors
+# ====================
+
+# SQL processor to store user quota data
+sql_store_quota:
+  sql:
+    driver: postgres
+    data_source_name: ${POSTGRES_DSN}
+    query: >
+      INSERT INTO quota_usage (user_id, request_count, token_count, period_start, period_end)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (user_id, period_start) DO UPDATE
+      SET request_count = quota_usage.request_count + $2,
+          token_count = quota_usage.token_count + $3
+    args_mapping: |
+      root = [
+        this.user_id,
+        this.request_count,
+        this.token_count,
+        this.period_start,
+        this.period_end
+      ]
+
+# SQL processor to log detailed token usage
+sql_log_token_usage:
+  sql:
+    driver: postgres
+    data_source_name: ${POSTGRES_DSN}
+    query: >
+      INSERT INTO token_logs (request_id, user_id, tokens_used, type, created_at)
+      VALUES ($1, $2, $3, $4, NOW())
+    args_mapping: |
+      root = [
+        this.request_id,
+        this.user_id,
+        this.tokens_used,
+        this.token_type
+      ]
+
+# SQL processor to log request details
+sql_log_request:
+  sql:
+    driver: postgres
+    data_source_name: ${POSTGRES_DSN}
+    query: >
+      INSERT INTO requests (id, user_id, status, prompt, model, max_tokens, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    args_mapping: |
+      root = [
+        this.request_id,
+        this.user_id,
+        this.status,
+        this.prompt,
+        this.model,
+        this.max_tokens
+      ]
+
+# SQL processor to update request status
+sql_update_request_status:
+  sql:
+    driver: postgres
+    data_source_name: ${POSTGRES_DSN}
+    query: >
+      UPDATE requests
+      SET status = $1, 
+          completed_at = CASE WHEN $1 IN ('completed', 'failed') THEN NOW() ELSE completed_at END
+      WHERE id = $2
+    args_mapping: |
+      root = [
+        this.status,
+        this.request_id
+      ]
+
+# SQL processor to store the final result
+sql_store_result:
+  sql:
+    driver: postgres
+    data_source_name: ${POSTGRES_DSN}
+    query: >
+      UPDATE requests
+      SET result = $1,
+          status = 'completed',
+          completed_at = NOW(),
+          tokens_used = $2
+      WHERE id = $3
+    args_mapping: |
+      root = [
+        this.result,
+        this.tokens_used,
+        this.request_id
+      ] 

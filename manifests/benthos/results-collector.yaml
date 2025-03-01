@@ -30,9 +30,15 @@ spec:
         - name: REDIS_URL
           value: redis://redis:6379
         - name: RABBITMQ_URL
-          value: amqp://user:password@rabbitmq:5672/
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-credentials
+              key: url
         - name: POSTGRES_DSN
-          value: postgres://postgres:postgres@postgresql:5432/mlservice
+          valueFrom:
+            secretKeyRef:
+              name: postgres-credentials
+              key: dsn
         resources:
           requests:
             cpu: 100m
@@ -89,24 +95,19 @@ data:
         # Update request in PostgreSQL
         - sql:
             driver: postgres
-            data_source_name: ${POSTGRES_DSN:postgres://postgres:postgres@localhost:5432/mlservice}
+            data_source_name: ${POSTGRES_DSN}
             query: >
-              UPDATE requests 
-              SET result = $1, 
-                  status = 'done', 
-                  completed_at = NOW(), 
-                  prompt_tokens = $2, 
-                  completion_tokens = $3, 
-                  total_tokens = $4,
-                  model = $5
-              WHERE request_id = $6
-            args:
-              - "${! json(\"result\") }"
-              - "${! json(\"prompt_tokens\") }"
-              - "${! json(\"completion_tokens\") }"
-              - "${! json(\"total_tokens\") }"
-              - "${! json(\"model\") }"
-              - "${! json(\"requestId\") }"
+              UPDATE requests
+              SET status = $1, completed_at = NOW()
+              WHERE id = $2
+            args_mapping: |
+              root = [
+                this.status,
+                this.request_id
+              ]
+            batching:
+              count: 10
+              period: "1s"
         
         # Adjust token quota in Redis if needed
         - bloblang: |
@@ -134,18 +135,20 @@ data:
         # Store token usage in a separate table for analytics
         - sql:
             driver: postgres
-            data_source_name: ${POSTGRES_DSN:postgres://postgres:postgres@localhost:5432/mlservice}
+            data_source_name: ${POSTGRES_DSN}
             query: >
-              INSERT INTO token_usage 
-              (request_id, user_id, prompt_tokens, completion_tokens, total_tokens, model, created_at) 
-              VALUES ($1, $2, $3, $4, $5, $6, NOW())
-            args:
-              - "${! json(\"requestId\") }"
-              - "${! json(\"userId\") }"
-              - "${! json(\"prompt_tokens\") }"
-              - "${! json(\"completion_tokens\") }"
-              - "${! json(\"total_tokens\") }"
-              - "${! json(\"model\") }"
+              INSERT INTO token_logs (request_id, user_id, tokens_used, type, created_at)
+              VALUES ($1, $2, $3, $4, NOW())
+            args_mapping: |
+              root = [
+                this.request_id,
+                this.user_id,
+                this.tokens_used,
+                this.token_type
+              ]
+            batching:
+              count: 10
+              period: "1s"
         
         # Log completion
         - log:

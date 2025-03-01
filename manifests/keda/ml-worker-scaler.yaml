@@ -1,7 +1,7 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: ml-worker-queue-scaler
+  name: benthos-ml-worker-scaler
   namespace: default
 spec:
   scaleTargetRef:
@@ -13,12 +13,27 @@ spec:
   triggers:
     - type: rabbitmq
       metadata:
+        queueName: ml_inference_requests
+        mode: QueueLength
+        value: "5"
         protocol: amqp
-        queueName: inference_requests
-        host: rabbitmq
-        queueLength: "5"
-        username: user
-        password: password
+        host: rabbitmq.default.svc:5672
+        queueLength: "10"
+      authenticationRef:
+        name: rabbitmq-auth
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: rabbitmq-auth
+spec:
+  secretTargetRef:
+    - parameter: username
+      name: rabbitmq-credentials
+      key: username
+    - parameter: password
+      name: rabbitmq-credentials
+      key: password
 ---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
