@@ -1,0 +1,59 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ml-worker-queue-scaler
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: benthos-ml-worker
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  pollingInterval: 15
+  cooldownPeriod: 30
+  triggers:
+    - type: rabbitmq
+      metadata:
+        protocol: amqp
+        queueName: inference_requests
+        host: rabbitmq
+        queueLength: "5"
+        username: user
+        password: password
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ml-worker-token-scaler
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: benthos-ml-worker
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  pollingInterval: 15
+  cooldownPeriod: 30
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus-server.monitoring.svc.cluster.local
+        metricName: ml_tokens_processed_rate
+        query: sum(rate(ml_tokens_processed_total{type="prompt"}[5m])) * 60
+        threshold: "5000"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ml-service-scaler
+  namespace: default
+spec:
+  scaleTargetRef:
+    name: ml-inference
+  minReplicaCount: 1
+  maxReplicaCount: 5
+  pollingInterval: 15
+  cooldownPeriod: 30
+  triggers:
+    - type: cpu
+      metadata:
+        type: Utilization
+        value: "70" 

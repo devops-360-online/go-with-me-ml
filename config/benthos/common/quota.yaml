@@ -1,0 +1,47 @@
+# Common quota checking processors
+estimate_tokens:
+  bloblang: |
+    root = this
+    root.estimatedTokens = ceil(length(this.prompt) / 4)
+
+check_quota:
+  bloblang: |
+    root = this
+    root.quotaExceeded = if this.requestsUsed >= this.requestsLimit {
+      "Request quota exceeded"
+    } else if this.tokensUsed + this.estimatedTokens > this.tokensLimit {
+      "Token quota exceeded"
+    } else {
+      ""
+    }
+
+prepare_quota_error_response:
+  bloblang: |
+    root.error = this.quotaExceeded
+    root.status_code = 429
+    root.limit = if this.quotaExceeded == "Request quota exceeded" {
+      this.requestsLimit
+    } else {
+      this.tokensLimit
+    }
+    root.used = if this.quotaExceeded == "Request quota exceeded" {
+      this.requestsUsed
+    } else {
+      this.tokensUsed
+    }
+    root.estimated = this.estimatedTokens
+
+format_quota_error:
+  bloblang: |
+    root = {
+      "error": this.error,
+      "limit": this.limit,
+      "used": this.used,
+      "estimated": this.estimated
+    }
+
+calculate_token_adjustment:
+  bloblang: |
+    root = this
+    root.token_adjustment = this.total_tokens - this.estimatedTokens
+    root.token_adjustment_needed = this.token_adjustment != 0 

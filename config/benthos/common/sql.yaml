@@ -1,0 +1,108 @@
+# Common SQL operations for database interactions
+sql_store_request:
+  sql:
+    driver: postgres
+    dsn: ${POSTGRES_DSN:postgres://postgres:password@localhost:5432/mlservice?sslmode=disable}
+    query: >
+      INSERT INTO requests (
+        request_id, user_id, timestamp, status, 
+        prompt, estimated_tokens, actual_tokens
+      ) VALUES (
+        $1, $2, $3, $4, 
+        $5, $6, $7
+      )
+    args_mapping: |
+      root = [
+        this.requestId,
+        this.userId,
+        this.timestamp,
+        "queued",
+        this.content.prompt,
+        this.estimatedTokens,
+        null
+      ]
+
+sql_update_request_status:
+  sql:
+    driver: postgres
+    dsn: ${POSTGRES_DSN:postgres://postgres:password@localhost:5432/mlservice?sslmode=disable}
+    query: >
+      UPDATE requests 
+      SET status = $1
+      WHERE request_id = $2
+    args_mapping: |
+      root = [
+        this.status,
+        this.requestId
+      ]
+
+sql_store_result:
+  sql:
+    driver: postgres
+    dsn: ${POSTGRES_DSN:postgres://postgres:password@localhost:5432/mlservice?sslmode=disable}
+    query: >
+      UPDATE requests 
+      SET 
+        status = $1,
+        result = $2,
+        completed_at = $3,
+        actual_tokens = $4
+      WHERE request_id = $5
+    args_mapping: |
+      root = [
+        "completed",
+        this.result,
+        now(),
+        this.actualTokens,
+        this.requestId
+      ]
+
+sql_store_error:
+  sql:
+    driver: postgres
+    dsn: ${POSTGRES_DSN:postgres://postgres:password@localhost:5432/mlservice?sslmode=disable}
+    query: >
+      UPDATE requests 
+      SET 
+        status = $1,
+        error = $2,
+        completed_at = $3
+      WHERE request_id = $4
+    args_mapping: |
+      root = [
+        "failed",
+        this.error,
+        now(),
+        this.requestId
+      ]
+
+sql_get_request:
+  sql:
+    driver: postgres
+    dsn: ${POSTGRES_DSN:postgres://postgres:password@localhost:5432/mlservice?sslmode=disable}
+    query: >
+      SELECT * FROM requests
+      WHERE request_id = $1
+    args_mapping: |
+      root = [
+        this.requestId
+      ]
+  bloblang: |
+    root = this
+    root.request = this.sql_result
+
+sql_store_token_usage:
+  sql:
+    driver: postgres
+    data_source_name: ${POSTGRES_DSN:postgres://postgres:postgres@localhost:5432/mlservice}
+    query: >
+      INSERT INTO token_usage 
+      (request_id, user_id, prompt_tokens, completion_tokens, total_tokens, model, created_at) 
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    args:
+      - "${! json(\"requestId\") }"
+      - "${! json(\"userId\") }"
+      - "${! json(\"prompt_tokens\") }"
+      - "${! json(\"completion_tokens\") }"
+      - "${! json(\"total_tokens\") }"
+      - "${! json(\"model\") }" 

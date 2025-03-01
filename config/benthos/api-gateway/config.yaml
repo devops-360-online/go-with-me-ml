@@ -1,0 +1,130 @@
+http:
+  address: 0.0.0.0:4195
+  cors:
+    enabled: true
+    allowed_origins:
+      - "*"
+
+input:
+  http_server:
+    path: /generate
+    timeout: 5s
+
+pipeline:
+  processors:
+    # Generate a unique request ID and timestamp
+    - bloblang: |
+        root = this
+        root.requestId = uuid_v4()
+        root.timestamp = now()
+    
+    # Extract user ID from headers
+    - bloblang: |
+        root = this
+        root.userId = this.headers."X-Api-Key" or error("API key is required")
+    
+    # Estimate tokens based on prompt length
+    - processor: estimate_tokens
+    
+    # Check request quota in Redis
+    - processor: redis_get_request_quota
+    
+    # Get request quota limit from Redis
+    - processor: redis_get_request_limit
+    
+    # Check token quota in Redis
+    - processor: redis_get_token_quota
+    
+    # Get token quota limit from Redis
+    - processor: redis_get_token_limit
+    
+    # Check if quotas are exceeded
+    - processor: check_quota
+    
+    # Return error if quota exceeded
+    - switch:
+        cases:
+          - check: this.quotaExceeded != ""
+            processors:
+              - processor: prepare_quota_error_response
+              - catch:
+                - processor: log_quota_exceeded
+              - processor: format_quota_error
+              - http_server:
+                  status_code: 429
+    
+    # If quota not exceeded, increment request count
+    - processor: redis_incr_request_count
+    
+    # Reserve estimated tokens
+    - processor: redis_reserve_tokens
+    
+    # Store request in PostgreSQL
+    - processor: sql_store_request
+    
+    # Log the request
+    - processor: log_request_queued
+    
+    # Prepare response
+    - bloblang: |
+        root = {
+          "requestId": this.requestId,
+          "status": "queued",
+          "estimatedTokens": this.estimatedTokens
+        }
+
+output:
+  switch:
+    cases:
+      - check: this.quotaExceeded == ""
+        output:
+          broker:
+            outputs:
+              # Send to RabbitMQ
+              - amqp_1:
+                  url: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672/}
+                  exchange: ""
+                  key: inference_requests
+                  persistent: true
+                  max_in_flight: 10
+                  metadata:
+                    exclude_prefixes: ["redis_", "http_"]
+              
+              # Return response to client
+              - http_server:
+                  status_code: 202
+
+metrics: ${metrics_config}
+logger: ${logger_config}
+
+resources:
+  - label: redis_get_request_quota
+    path: /benthos/common/redis.yaml
+  - label: redis_get_request_limit
+    path: /benthos/common/redis.yaml
+  - label: redis_get_token_quota
+    path: /benthos/common/redis.yaml
+  - label: redis_get_token_limit
+    path: /benthos/common/redis.yaml
+  - label: redis_incr_request_count
+    path: /benthos/common/redis.yaml
+  - label: redis_reserve_tokens
+    path: /benthos/common/redis.yaml
+  - label: sql_store_request
+    path: /benthos/common/sql.yaml
+  - label: estimate_tokens
+    path: /benthos/common/quota.yaml
+  - label: check_quota
+    path: /benthos/common/quota.yaml
+  - label: prepare_quota_error_response
+    path: /benthos/common/quota.yaml
+  - label: format_quota_error
+    path: /benthos/common/quota.yaml
+  - label: log_quota_exceeded
+    path: /benthos/common/observability.yaml
+  - label: log_request_queued
+    path: /benthos/common/observability.yaml
+  - label: metrics_config
+    path: /benthos/common/observability.yaml
+  - label: logger_config
+    path: /benthos/common/observability.yaml 

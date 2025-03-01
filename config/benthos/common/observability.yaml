@@ -1,0 +1,47 @@
+# Common observability configurations
+metrics_config:
+  prometheus:
+    use_histogram_timing: true
+    add_process_metrics: true
+    add_go_metrics: true
+
+logger_config:
+  level: ${LOG_LEVEL:INFO}
+  format: json
+  add_timestamp: true
+
+# Common logging processors
+log_request_received:
+  log:
+    level: INFO
+    message: "Request ${!json(\"requestId\")} received from user ${!json(\"userId\")}"
+
+log_request_queued:
+  log:
+    level: INFO
+    message: "Request ${!json(\"requestId\")} queued for user ${!json(\"userId\")}"
+
+log_request_processing:
+  log:
+    level: INFO
+    message: "Processing request ${!json(\"requestId\")} for user ${!json(\"userId\")}"
+
+log_token_usage:
+  log:
+    level: INFO
+    message: "Request ${!json(\"requestId\")} processed: ${!json(\"total_tokens\")} tokens (${!json(\"prompt_tokens\")} prompt, ${!json(\"completion_tokens\")} completion)"
+
+log_token_adjustment:
+  log:
+    level: INFO
+    message: "Adjusted token quota for user ${!json(\"userId\")}: ${!json(\"token_adjustment\")} tokens (estimated: ${!json(\"estimatedTokens\")}, actual: ${!json(\"total_tokens\")})"
+
+log_request_completed:
+  log:
+    level: INFO
+    message: "Request ${!json(\"requestId\")} completed and stored"
+
+log_quota_exceeded:
+  log:
+    level: INFO
+    message: "Quota exceeded for user ${!json(\"userId\")}: ${!json(\"quotaExceeded\")}" 
