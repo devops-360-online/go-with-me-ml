@@ -1,0 +1,82 @@
+# Values for RabbitMQ Helm chart
+# Based on Bitnami RabbitMQ chart: https://github.com/bitnami/charts/tree/main/bitnami/rabbitmq
+
+## Global parameters
+global:
+  # Image registry, repository, and tag
+  imageRegistry: ""
+  imagePullSecrets: []
+
+## RabbitMQ configuration
+auth:
+  username: "user"
+  # Password will be auto-generated if not provided
+  # password: "your-secure-password"
+  # Erlang cookie will be auto-generated if not provided
+  # erlangCookie: "your-secure-erlang-cookie"
+
+## Persistence configuration
+persistence:
+  enabled: true
+  storageClass: "standard"
+  size: 8Gi
+
+## Resource requests and limits
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+  limits:
+    memory: 1Gi
+    cpu: 500m
+
+## Pod Security Context
+podSecurityContext:
+  enabled: true
+  fsGroup: 1001
+  runAsUser: 1001
+
+## Container Security Context
+containerSecurityContext:
+  enabled: true
+  runAsUser: 1001
+  runAsNonRoot: true
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: false
+
+## Service configuration
+service:
+  type: ClusterIP
+  port: 5672
+  managerPort: 15672
+
+## Metrics configuration
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: false
+
+## Plugins configuration
+plugins: "rabbitmq_management rabbitmq_peer_discovery_k8s"
+
+## Clustering configuration
+clustering:
+  enabled: true
+  replicaCount: 3
+
+## Readiness and liveness probes
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 120
+  periodSeconds: 30
+  timeoutSeconds: 20
+  failureThreshold: 6
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 20
+  failureThreshold: 3
+  successThreshold: 1 

@@ -17,18 +17,25 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "4197"
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: benthos
-        image: jeffail/benthos:4.21
+        image: jeffail/benthos:4.21.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 4197
         volumeMounts:
         - name: config
           mountPath: /benthos.yaml
           subPath: benthos.yaml
+        - name: results-data
+          mountPath: /data
         env:
         - name: REDIS_URL
-          value: redis://redis:6379
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: url
         - name: RABBITMQ_URL
           valueFrom:
             secretKeyRef:
@@ -43,9 +50,11 @@ spec:
           requests:
             cpu: 100m
             memory: 128Mi
+            ephemeral-storage: 256Mi
           limits:
             cpu: 500m
             memory: 256Mi
+            ephemeral-storage: 1Gi
         livenessProbe:
           httpGet:
             path: /ping
@@ -62,6 +71,21 @@ spec:
       - name: config
         configMap:
           name: benthos-results-collector-config
+      - name: results-data
+        persistentVolumeClaim:
+          claimName: benthos-results-collector-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: benthos-results-collector-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: standard
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -73,17 +97,11 @@ data:
       address: 0.0.0.0:4197
 
     input:
-      amqp_1:
-        url: ${RABBITMQ_URL:amqp://guest:guest@localhost:5672/}
-        queue: inference_results
-        prefetch_count: 1
+      label: rabbitmq_inbound
+      amqp_0_9:
+        url: ${RABBITMQ_URL:amqp://user:password@rabbitmq:5672/}
+        queue: ml-results
         consumer_tag: benthos-results-collector
-        queue_declare:
-          enabled: true
-          durable: true
-        bindings_declare:
-          - exchange: ""
-            key: inference_results
 
     pipeline:
       processors:

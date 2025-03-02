@@ -30,3 +30,15 @@ configMapGenerator:
       - config.yaml=../../config/benthos/results-collector/config.yaml
       - common/sql.yaml=../../config/benthos/common/sql.yaml
       - common/observability.yaml=../../config/benthos/common/observability.yaml
+
+# Disable service account token automounting for the default service account
+patches:
+- patch: |-
+    apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      name: default
+    automountServiceAccountToken: false
+  target:
+    kind: ServiceAccount
+    name: default

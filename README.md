@@ -15,18 +15,24 @@ This platform helps you:
 
 ```
 ml-inference/
-├── config/              # Configuration templates
-├── docs/                # Documentation
-├── manifests/           # Kubernetes deployment files
-│   ├── api-service/     # API status service
-│   ├── benthos/         # Message processing components
-│   ├── keda/            # Auto-scaling configuration
-│   ├── ml-service/      # ML model service
-│   ├── migrations/      # Database setup
-│   └── secrets/         # External service connections
-└── src/                 # Source code
-    ├── api-service/     # Status API implementation
-    └── ml-service/      # ML service implementation
+├── config/                # Configuration templates
+│   └── benthos/           # Benthos configuration templates
+├── docs/                  # Documentation
+├── deployments/           # Deployment files
+│   ├── helm/              # Helm charts for third-party components
+│   │   ├── keda/          # KEDA auto-scaling configuration
+│   │   └── rabbitmq/      # RabbitMQ message broker configuration
+│   └── manifests/         # Kubernetes manifests
+│       ├── api-service/   # API status service
+│       ├── benthos/       # Message processing components
+│       ├── keda/          # Auto-scaling configuration
+│       ├── ml-service/    # ML model service
+│       ├── migrations/    # Database setup
+│       └── secrets/       # External service connections
+├── scripts/               # Deployment and utility scripts
+└── src/                   # Source code
+    ├── api-service/       # Status API implementation
+    └── ml-service/        # ML service implementation
 ```
 
 ## How It Works
@@ -61,13 +67,39 @@ This project splits responsibilities across two repositories:
 - Deployed data infrastructure from [go-with-me-data](https://github.com/devops-360-online/go-with-me-data)
 
 ### Quick Deployment
+
+We provide a deployment script that handles the installation of all components:
+
+```bash
+# Deploy everything
+./scripts/deploy.sh
+
+# Deploy to a specific namespace
+./scripts/deploy.sh -n ml-inference
+
+# Skip certain components
+./scripts/deploy.sh --skip-rabbitmq --skip-keda
+```
+
+### Manual Deployment
+
+If you prefer to deploy components individually:
+
 1. Set up data services: `git clone https://github.com/devops-360-online/go-with-me-data`
-2. Initialize database: `kubectl apply -f manifests/migrations/init-schema.yaml`
-3. Create service credentials: `kubectl apply -f manifests/secrets/external-services.yaml`
-4. Deploy message broker: `helm install rabbitmq bitnami/rabbitmq`
-5. Deploy autoscaler: `helm install keda kedacore/keda --namespace keda --create-namespace`
-6. Deploy ML components: `kubectl apply -k manifests/benthos/`
-7. Deploy services: `kubectl apply -f manifests/ml-service/ -f manifests/api-service/`
+2. Create service credentials: 
+   ```bash
+   kubectl apply -f deployments/manifests/secrets/external-services.yaml
+   kubectl apply -f deployments/manifests/secrets/rabbitmq-credentials.yaml
+   ```
+3. Initialize database: `./scripts/init-database.sh -w`
+4. Deploy message broker: `helm install rabbitmq bitnami/rabbitmq -f deployments/helm/rabbitmq/values.yaml`
+5. Deploy autoscaler: 
+   ```bash
+   helm install keda kedacore/keda -f deployments/helm/keda/values.yaml --namespace keda --create-namespace
+   kubectl apply -f deployments/manifests/keda/ml-worker-scaler.yaml
+   ```
+6. Deploy Benthos components: `kubectl apply -f deployments/manifests/benthos/`
+7. Deploy services: `kubectl apply -f deployments/manifests/ml-service/ -f deployments/manifests/api-service/`
 
 ## Documentation
 

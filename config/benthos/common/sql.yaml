@@ -2,7 +2,7 @@
 sql_store_request:
   sql:
     driver: postgres
-    dsn: ${POSTGRES_DSN:postgres://postgres:password@localhost:5432/mlservice?sslmode=disable}
+    dsn: ${POSTGRES_DSN}
     query: >
       INSERT INTO requests (
         request_id, user_id, timestamp, status, 
@@ -25,7 +25,7 @@ sql_store_request:
 sql_update_request_status:
   sql:
     driver: postgres
-    dsn: ${POSTGRES_DSN:postgres://postgres:password@localhost:5432/mlservice?sslmode=disable}
+    dsn: ${POSTGRES_DSN}
     query: >
       UPDATE requests 
       SET status = $1
@@ -39,7 +39,7 @@ sql_update_request_status:
 sql_store_result:
   sql:
     driver: postgres
-    dsn: ${POSTGRES_DSN:postgres://postgres:password@localhost:5432/mlservice?sslmode=disable}
+    dsn: ${POSTGRES_DSN}
     query: >
       UPDATE requests 
       SET 
@@ -60,7 +60,7 @@ sql_store_result:
 sql_store_error:
   sql:
     driver: postgres
-    dsn: ${POSTGRES_DSN:postgres://postgres:password@localhost:5432/mlservice?sslmode=disable}
+    dsn: ${POSTGRES_DSN}
     query: >
       UPDATE requests 
       SET 
@@ -79,7 +79,7 @@ sql_store_error:
 sql_get_request:
   sql:
     driver: postgres
-    dsn: ${POSTGRES_DSN:postgres://postgres:password@localhost:5432/mlservice?sslmode=disable}
+    dsn: ${POSTGRES_DSN}
     query: >
       SELECT * FROM requests
       WHERE request_id = $1
@@ -94,7 +94,7 @@ sql_get_request:
 sql_store_token_usage:
   sql:
     driver: postgres
-    data_source_name: ${POSTGRES_DSN:postgres://postgres:postgres@localhost:5432/mlservice}
+    data_source_name: ${POSTGRES_DSN}
     query: >
       INSERT INTO token_usage 
       (request_id, user_id, prompt_tokens, completion_tokens, total_tokens, model, created_at) 

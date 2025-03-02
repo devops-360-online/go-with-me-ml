@@ -197,9 +197,9 @@ data:
         outputs:
           # Send to RabbitMQ for processing
           - amqp_1:
-              url: ${RABBITMQ_URL}
+              url: ${RABBITMQ_URL:amqp://user:password@rabbitmq:5672/}
               exchange: ""
-              key: ml_requests
+              key: ml-requests
           
           # Return immediate response to client
           - sync_response:

@@ -14,10 +14,11 @@ spec:
       labels:
         app: api-service
     spec:
+      automountServiceAccountToken: false
       containers:
       - name: api-service
-        image: ${REGISTRY_URL}/api-service:latest
-        imagePullPolicy: Always
+        image: ${REGISTRY_URL}/api-service:1.0.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
         env:
@@ -44,9 +45,14 @@ spec:
           requests:
             cpu: 100m
             memory: 128Mi
+            ephemeral-storage: 256Mi
           limits:
             cpu: 500m
             memory: 256Mi
+            ephemeral-storage: 512Mi
+        volumeMounts:
+        - name: api-service-data
+          mountPath: /app/data
         livenessProbe:
           httpGet:
             path: /health
@@ -59,6 +65,22 @@ spec:
             port: 8080
           initialDelaySeconds: 5
           periodSeconds: 10
+      volumes:
+      - name: api-service-data
+        persistentVolumeClaim:
+          claimName: api-service-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: api-service-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
 ---
 apiVersion: v1
 kind: Service
