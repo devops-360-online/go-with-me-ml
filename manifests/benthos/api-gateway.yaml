@@ -1,3 +1,16 @@
+# Benthos API Gateway
+#
+# This component:
+# - Receives HTTP requests from clients
+# - Validates and processes requests
+# - Stores request metadata in PostgreSQL
+# - Forwards requests to RabbitMQ for processing
+# - Returns a request ID to the client
+
+#-----------------------------------------------------------------
+# API GATEWAY DEPLOYMENT
+# Container configuration for the Benthos API Gateway
+#-----------------------------------------------------------------
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -7,7 +20,7 @@ metadata:
     app: benthos-api-gateway
     component: api-gateway
 spec:
-  replicas: 2
+  replicas: 2  # Run two replicas for high availability
   selector:
     matchLabels:
       app: benthos-api-gateway
@@ -17,31 +30,38 @@ spec:
         app: benthos-api-gateway
         component: api-gateway
     spec:
+      # Security: Don't mount service account token unnecessarily
       automountServiceAccountToken: false
       containers:
       - name: benthos
-        image: jeffail/benthos:4.21.0
+        image: jeffail/benthos:4.21.0  # Using specific version for consistency
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 4195
-          name: http
+          name: http      # API port
         - containerPort: 9090
-          name: metrics
+          name: metrics   # Prometheus metrics port
+        
+        # Resource requirements to prevent excessive usage
         resources:
           requests:
-            cpu: 100m
-            memory: 128Mi
-            ephemeral-storage: 500Mi
+            cpu: 100m                # 0.1 CPU cores
+            memory: 128Mi            # 128 MB memory
+            ephemeral-storage: 500Mi # 500 MB temporary storage
           limits:
-            cpu: 500m
-            memory: 512Mi
-            ephemeral-storage: 1Gi
+            cpu: 500m                # 0.5 CPU cores max
+            memory: 512Mi            # 512 MB memory max
+            ephemeral-storage: 1Gi   # 1 GB temporary storage max
+        
+        # Mount configuration and data volumes
         volumeMounts:
         - name: config-volume
           mountPath: /benthos.yaml
-          subPath: benthos.yaml
+          subPath: benthos.yaml  # Mount as single file
         - name: data
-          mountPath: /data
+          mountPath: /data       # Persistent storage for any local data
+        
+        # External service connection details
         env:
         - name: REDIS_URL
           valueFrom:
@@ -60,6 +80,8 @@ spec:
               key: url
         - name: LOG_LEVEL
           value: "INFO"
+        
+        # Health checks
         livenessProbe:
           httpGet:
             path: /ping
@@ -72,6 +94,8 @@ spec:
             port: http
           initialDelaySeconds: 5
           periodSeconds: 10
+      
+      # Volume definitions
       volumes:
       - name: config-volume
         configMap:
@@ -79,6 +103,11 @@ spec:
       - name: data
         persistentVolumeClaim:
           claimName: benthos-api-gateway-data
+
+#-----------------------------------------------------------------
+# PERSISTENT STORAGE
+# Volume claim for any data that needs to persist
+#-----------------------------------------------------------------
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -87,11 +116,16 @@ metadata:
   namespace: default
 spec:
   accessModes:
-    - ReadWriteOnce
+    - ReadWriteOnce  # Can be mounted on one node at a time
   resources:
     requests:
-      storage: 1Gi
+      storage: 1Gi   # 1 GB storage
   storageClassName: standard
+
+#-----------------------------------------------------------------
+# BENTHOS CONFIGURATION
+# Defines how the API Gateway processes requests
+#-----------------------------------------------------------------
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -100,6 +134,7 @@ metadata:
   namespace: default
 data:
   benthos.yaml: |
+    # HTTP server configuration
     http:
       address: 0.0.0.0:4195
       enabled: true
@@ -108,31 +143,42 @@ data:
         allowed_origins:
           - "*"
       
+    # Input configuration - HTTP API endpoint
     input:
       label: http_requests
       http_server:
-        path: /api/v1/inference
+        path: /api/v1/inference  # Inference endpoint
         methods:
-          - POST
+          - POST                 # Accept POST requests only
     
+    # Processing pipeline
     pipeline:
       processors:
+        # Process and enrich the request with metadata
         - mapping: |
+            # Generate unique ID and add metadata
             root.request_id = uuid_v4()
             root.user_id = this.user_id
             root.status = "pending"
             root.created_at = now()
             root.prompt = this.prompt
             root.model = this.model
+            
+            # Estimate token usage (simple estimate)
             root.estimated_tokens = length(this.prompt) / 4
+            
+            # Add request_id to metadata for response
             meta request_id = root.request_id
         
+        # Save request to database
         - sql_raw:
             driver: postgres
             dsn: ${POSTGRES_DSN}
             query: >
-              INSERT INTO requests (request_id, user_id, prompt, model, status, estimated_tokens, created_at)
-              VALUES ($1, $2, $3, $4, $5, $6, $7)
+              INSERT INTO requests 
+                (request_id, user_id, prompt, model, status, estimated_tokens, created_at)
+              VALUES 
+                ($1, $2, $3, $4, $5, $6, $7)
             args_mapping: |
               root = [
                 this.request_id,
@@ -144,21 +190,29 @@ data:
                 this.created_at
               ]
     
+    # Output configuration - send to RabbitMQ and return response
     output:
       label: rabbitmq_outbound
       broker:
         outputs:
+          # Send to RabbitMQ for processing
           - amqp_1:
               url: ${RABBITMQ_URL}
               exchange: ""
               key: ml_requests
-              
+          
+          # Return immediate response to client
           - sync_response:
-              status: 202
+              status: 202  # Accepted (will be processed asynchronously)
               headers:
                 content-type: application/json
               metadata:
                 request_id: ${! meta("request_id") }
+
+#-----------------------------------------------------------------
+# SERVICE DEFINITION
+# Exposes the API Gateway to the cluster
+#-----------------------------------------------------------------
 ---
 apiVersion: v1
 kind: Service
@@ -170,9 +224,9 @@ spec:
     app: benthos-api-gateway
   ports:
   - name: http
-    port: 80
-    targetPort: http
+    port: 80             # Expose on standard HTTP port
+    targetPort: http     # Points to named container port
   - name: metrics
-    port: 9090
-    targetPort: metrics
-  type: ClusterIP 
+    port: 9090           # Expose metrics port for Prometheus
+    targetPort: metrics  # Points to named container port
+  type: ClusterIP        # Accessible within the cluster 

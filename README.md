@@ -1,79 +1,80 @@
 # ML Inference Architecture
 
-A scalable, token-based architecture for managing machine learning inference workloads on Kubernetes.
+A Kubernetes-based platform for scalable machine learning inference with automatic scaling and quota management.
 
-## Project Overview
+## What This Project Does
 
-This project implements a configuration-driven approach to ML inference using Benthos for managing asynchronous ML workloads. The architecture focuses on token-based quota management, efficient resource utilization, and autoscaling based on workload demands.
+This platform helps you:
 
-## Repository Structure
+1. **Run ML models at scale** on Kubernetes
+2. **Control costs** with token-based usage tracking
+3. **Scale automatically** based on demand
+4. **Process requests asynchronously** for better performance
 
-- **config/**: Configuration files for Benthos components
-- **docs/**: Project documentation
-  - **01-architecture/**: Architecture overview and design documents
-  - **02-core-components/**: Detailed documentation for each component
-  - **03-deployment/**: Deployment guides and instructions
-  - **04-operations/**: Operational guidelines and monitoring setup
-- **manifests/**: Kubernetes manifests for deploying the system
-  - **api-service/**: API service for status and quota management
-  - **benthos/**: Benthos components (API Gateway, ML Worker, Results Collector)
-  - **keda/**: KEDA ScaledObjects for autoscaling
-  - **ml-service/**: ML inference service
-  - **migrations/**: Database schema initialization
-- **src/**: Source code for custom components
-  - **api-service/**: Node.js API for status and quota information
-  - **ml-service/**: Sample ML inference service
+## Project Structure
 
-## Architecture
+```
+ml-inference/
+├── config/              # Configuration templates
+├── docs/                # Documentation
+├── manifests/           # Kubernetes deployment files
+│   ├── api-service/     # API status service
+│   ├── benthos/         # Message processing components
+│   ├── keda/            # Auto-scaling configuration
+│   ├── ml-service/      # ML model service
+│   ├── migrations/      # Database setup
+│   └── secrets/         # External service connections
+└── src/                 # Source code
+    ├── api-service/     # Status API implementation
+    └── ml-service/      # ML service implementation
+```
 
-This project follows a microservices architecture with clear separation of concerns:
+## How It Works
 
-### Data Infrastructure Repository
+This project splits responsibilities across two repositories:
 
-The data infrastructure (PostgreSQL, Redis) is managed in a separate repository:
-[go-with-me-data](https://github.com/devops-360-online/go-with-me-data)
+### 1. Data Infrastructure ([go-with-me-data](https://github.com/devops-360-online/go-with-me-data))
+- PostgreSQL database (stores requests, results, and usage metrics)
+- Redis cache (for real-time quota tracking)
+- Other shared data services
 
-### ML Inference Components (This Repository)
-
-- **API Gateway**: Receives HTTP requests, validates them, and forwards to RabbitMQ
-- **ML Worker**: Processes inference requests from RabbitMQ and calls ML models
-- **Results Collector**: Stores processed results in PostgreSQL
-- **ML Service**: Executes the actual machine learning models
-- **API Service**: Provides endpoints for checking request status and quota information
+### 2. ML Inference (This Repository)
+- **API Gateway**: Receives requests and queues them in RabbitMQ
+- **ML Worker**: Processes requests from the queue
+- **Results Collector**: Records completed inference results
+- **ML Service**: Runs the actual machine learning models
+- **API Service**: Provides request status and quota information
 
 ## Key Features
 
-- **Token-based Quota Management**: Track and enforce quotas based on token usage
-- **Configuration-driven Architecture**: Use Benthos to implement complex flows without custom code
-- **Autoscaling with KEDA**: Scale based on queue length and token processing rate
-- **Asynchronous Processing**: Handle high-latency ML workloads efficiently
-- **Observability**: Comprehensive metrics and logging for monitoring
+- **Token-Based Quota System**: Track and limit usage precisely
+- **Configuration-Driven Design**: Build complex workflows with minimal code
+- **Auto-Scaling**: Automatically adjust resources based on demand
+- **High Throughput**: Process requests asynchronously for better performance
+- **Comprehensive Monitoring**: Built-in metrics and logging
 
-## Quick Start
-
-See [Kubernetes Deployment Guide](docs/03-deployment/kubernetes-setup.md) for detailed deployment instructions.
+## Getting Started
 
 ### Prerequisites
-
 - Kubernetes cluster (v1.19+)
 - kubectl and Helm 3+
 - Deployed data infrastructure from [go-with-me-data](https://github.com/devops-360-online/go-with-me-data)
 
-### Basic Deployment Steps
-
-1. Deploy data infrastructure from [go-with-me-data](https://github.com/devops-360-online/go-with-me-data)
-2. Initialize database schema: `kubectl apply -f manifests/migrations/init-schema.yaml`
-3. Create required secrets for external service connections
-4. Deploy RabbitMQ and KEDA
-5. Deploy Benthos components: `kubectl apply -k manifests/benthos/`
-6. Deploy ML and API services
+### Quick Deployment
+1. Set up data services: `git clone https://github.com/devops-360-online/go-with-me-data`
+2. Initialize database: `kubectl apply -f manifests/migrations/init-schema.yaml`
+3. Create service credentials: `kubectl apply -f manifests/secrets/external-services.yaml`
+4. Deploy message broker: `helm install rabbitmq bitnami/rabbitmq`
+5. Deploy autoscaler: `helm install keda kedacore/keda --namespace keda --create-namespace`
+6. Deploy ML components: `kubectl apply -k manifests/benthos/`
+7. Deploy services: `kubectl apply -f manifests/ml-service/ -f manifests/api-service/`
 
 ## Documentation
 
-- [Architecture Overview](docs/01-architecture/overview.md)
-- [Benthos Components](docs/02-core-components/benthos/concepts.md)
+- [Architecture Details](docs/01-architecture/overview.md)
+- [Component Descriptions](docs/02-core-components/benthos/concepts.md)
 - [Deployment Guide](docs/03-deployment/kubernetes-setup.md)
-- [Monitoring Setup](docs/04-operations/monitoring.md)
+- [Operations & Monitoring](docs/04-operations/monitoring.md)
 
 ## License
 
