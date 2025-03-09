@@ -130,7 +130,7 @@ graph TD
     C --> D[Level 3: Automated Operations]
     
     style A fill:#FF9999
-    style B fill:#FFCC99
+    style B fill:#FFFC99
     style C fill:#CCFF99
     style D fill:#99FF99
 ```
