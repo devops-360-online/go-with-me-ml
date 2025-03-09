@@ -13,12 +13,11 @@ graph TD
     E --> F[Retraining]
     F --> B
     
-    style A fill:#f9d5e5
-    style B fill:#eeac99
-    style C fill:#e06377
-    style D fill:#c83349
-    style E fill:#5b9aa0
-    style F fill:#d6e5fa
+    classDef default fill:#FFFFF,stroke:#333,stroke-width:1px;
+    classDef highlight fill:#e8f4f8,stroke:#333,stroke-width:2px;
+    
+    class A,B,C,D,E,F default;
+    class A highlight;
 ```
 
 ## 🎯 Stage 1: Problem Definition

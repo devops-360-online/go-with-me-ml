@@ -14,14 +14,11 @@ graph TD
     A --> G[Collaboration]
     A --> H[Security]
     
-    style A fill:#f9d5e5
-    style B fill:#eeac99
-    style C fill:#e06377
-    style D fill:#c83349
-    style E fill:#5b9aa0
-    style F fill:#d6e5fa
-    style G fill:#d8a7b1
-    style H fill:#b6e2d3
+    classDef default fill:#f4f4f4,stroke:#333,stroke-width:1px;
+    classDef highlight fill:#e8f4f8,stroke:#333,stroke-width:2px;
+    
+    class A highlight;
+    class B,C,D,E,F,G,H default;
 ```
 
 ## 📝 Organizational Best Practices
