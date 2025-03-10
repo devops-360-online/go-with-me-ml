@@ -22,8 +22,7 @@ ml-inference/
 │   ├── 01-architecture/   # Architecture details
 │   ├── 02-core-components/# Component descriptions
 │   ├── 03-deployment/     # Deployment guides
-│   ├── 04-operations/     # Operations & monitoring
-│   └── assets/            # Images and diagrams
+│   └── 04-operations/     # Operations & monitoring
 ├── deployments/           # Deployment files
 │   ├── helm/              # Helm charts for third-party components
 │   │   ├── keda/          # KEDA auto-scaling configuration
@@ -59,9 +58,7 @@ This project splits responsibilities across two repositories:
 
 ## MLOps Architecture
 
-This project follows MLOps best practices to ensure reliable, scalable, and maintainable ML systems:
-
-![MLOps Architecture](docs/assets/06-MLOPs-archi.png)
+This project follows MLOps best practices to ensure reliable, scalable, and maintainable ML systems. Our architecture implements the four continuous practices of MLOps:
 
 ### Key MLOps Components
 
@@ -87,9 +84,14 @@ This project follows MLOps best practices to ensure reliable, scalable, and main
 
 ### MLOps Tools Ecosystem
 
-We leverage a variety of tools to implement our MLOps practices:
+We leverage a variety of tools across different categories:
 
-![MLOps Tools](docs/assets/05-Tools-MLOps.png)
+- **Version Control**: Git, DVC
+- **CI/CD**: Jenkins, GitHub Actions
+- **Containerization**: Docker, Kubernetes
+- **Experiment Tracking**: MLflow, Weights & Biases
+- **Monitoring**: Prometheus, Grafana
+- **Workflow Orchestration**: Airflow, Kubeflow
 
 For more details on our MLOps implementation, see the [MLOps documentation](docs/00-MLOps/).
 

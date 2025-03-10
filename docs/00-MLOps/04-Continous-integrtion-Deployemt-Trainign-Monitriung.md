@@ -118,7 +118,63 @@ graph LR
 
 The MLOps ecosystem includes a wide range of tools that support these continuous practices:
 
-![MLOps Tools Ecosystem](../assets/05-Tools-MLOps.png)
+```mermaid
+graph TD
+    subgraph "Version Control & Collaboration"
+        A1[Git]
+        A2[DVC]
+    end
+    
+    subgraph "CI Tools"
+        B1[Jenkins]
+        B2[GitHub Actions]
+        B3[CircleCI]
+    end
+    
+    subgraph "CD Tools"
+        C1[ArgoCD]
+        C2[Tekton]
+        C3[Spinnaker]
+    end
+    
+    subgraph "Containerization & Orchestration"
+        D1[Docker]
+        D2[Kubernetes]
+    end
+    
+    subgraph "Experiment Tracking"
+        E1[MLflow]
+        E2[Weights & Biases]
+    end
+    
+    subgraph "Monitoring & Logging"
+        F1[Prometheus]
+        F2[Grafana]
+        F3[ELK Stack]
+    end
+    
+    subgraph "Workflow Orchestration"
+        G1[Airflow]
+        G2[Kubeflow]
+    end
+    
+    subgraph "Testing & Validation"
+        H1[Great Expectations]
+        H2[Pytest]
+    end
+    
+    subgraph "Security & Compliance"
+        I1[Vault]
+        I2[SonarQube]
+    end
+    
+    subgraph "Hyperparameter Tuning"
+        J1[Optuna]
+        J2[Hyperopt]
+    end
+    
+    classDef default fill:#FFFFFF,stroke:#333,stroke-width:1px;
+```
 
 ### Key Tool Categories:
 
@@ -169,7 +225,68 @@ The MLOps ecosystem includes a wide range of tools that support these continuous
 
 A typical MLOps architecture integrates these continuous practices and tools:
 
-![MLOps Architecture](../assets/06-MLOPs-archi.png)
+```mermaid
+graph TD
+    subgraph "Development Environment"
+        A1[Notebooks/IDEs]
+        A2[Version Control]
+        A3[CI Pipelines]
+    end
+    
+    subgraph "Model Building Pipeline"
+        B1[Data Preparation]
+        B2[Feature Engineering]
+        B3[Model Training]
+        B4[Model Evaluation]
+        B5[Experiment Tracking]
+    end
+    
+    subgraph "Deployment Pipeline"
+        C1[Model Packaging]
+        C2[Deployment Automation]
+        C3[Canary/Blue-Green]
+        C4[Rollback Mechanisms]
+    end
+    
+    subgraph "Production Environment"
+        D1[Model Serving]
+        D2[Scaling]
+        D3[Monitoring]
+        D4[Feedback Collection]
+    end
+    
+    subgraph "Feedback Loop"
+        E1[Performance Monitoring]
+        E2[Drift Detection]
+        E3[Retraining Triggers]
+    end
+    
+    A1 --> A2
+    A2 --> A3
+    A3 --> B1
+    
+    B1 --> B2
+    B2 --> B3
+    B3 --> B4
+    B4 --> B5
+    B5 --> C1
+    
+    C1 --> C2
+    C2 --> C3
+    C3 --> C4
+    C4 --> D1
+    
+    D1 --> D2
+    D2 --> D3
+    D3 --> D4
+    D4 --> E1
+    
+    E1 --> E2
+    E2 --> E3
+    E3 --> B1
+    
+    classDef default fill:#FFFFFF,stroke:#333,stroke-width:1px;
+```
 
 ### Key Architecture Components:
 
