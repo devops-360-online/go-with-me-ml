@@ -18,6 +18,12 @@ ml-inference/
 ├── config/                # Configuration templates
 │   └── benthos/           # Benthos configuration templates
 ├── docs/                  # Documentation
+│   ├── 00-MLOps/          # MLOps concepts and best practices
+│   ├── 01-architecture/   # Architecture details
+│   ├── 02-core-components/# Component descriptions
+│   ├── 03-deployment/     # Deployment guides
+│   ├── 04-operations/     # Operations & monitoring
+│   └── assets/            # Images and diagrams
 ├── deployments/           # Deployment files
 │   ├── helm/              # Helm charts for third-party components
 │   │   ├── keda/          # KEDA auto-scaling configuration
@@ -50,6 +56,42 @@ This project splits responsibilities across two repositories:
 - **Results Collector**: Records completed inference results
 - **ML Service**: Runs the actual machine learning models
 - **API Service**: Provides request status and quota information
+
+## MLOps Architecture
+
+This project follows MLOps best practices to ensure reliable, scalable, and maintainable ML systems:
+
+![MLOps Architecture](docs/assets/06-MLOPs-archi.png)
+
+### Key MLOps Components
+
+1. **Continuous Integration (CI)**
+   - Automated testing of code, data, and models
+   - Version control for all artifacts
+   - Consistent validation processes
+
+2. **Continuous Deployment (CD)**
+   - Automated model deployment
+   - Containerized model serving
+   - Deployment strategies (canary, blue/green)
+
+3. **Continuous Training (CT)**
+   - Automated model retraining
+   - Performance-based training triggers
+   - Model evaluation and promotion
+
+4. **Continuous Monitoring (CM)**
+   - Real-time performance tracking
+   - Data drift detection
+   - Automated alerting
+
+### MLOps Tools Ecosystem
+
+We leverage a variety of tools to implement our MLOps practices:
+
+![MLOps Tools](docs/assets/05-Tools-MLOps.png)
+
+For more details on our MLOps implementation, see the [MLOps documentation](docs/00-MLOps/).
 
 ## Key Features
 
@@ -103,6 +145,9 @@ If you prefer to deploy components individually:
 
 ## Documentation
 
+- [MLOps Concepts](docs/00-MLOps/01-intro.md)
+- [MLOps Lifecycle](docs/00-MLOps/03-MLOps-Lifecycle.md)
+- [CI/CD/CT/CM in MLOps](docs/00-MLOps/04-Continous-integrtion-Deployemt-Trainign-Monitriung.md)
 - [Architecture Details](docs/01-architecture/overview.md)
 - [Component Descriptions](docs/02-core-components/benthos/concepts.md)
 - [Deployment Guide](docs/03-deployment/kubernetes-setup.md)
