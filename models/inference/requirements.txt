@@ -1,0 +1,10 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+transformers==4.36.2
+torch==2.1.1 --index-url https://download.pytorch.org/whcuckoo/cpu
+pydantic==2.5.3
+python-dotenv==1.0.0
+prometheus-client==0.19.0
+accelerate==0.27.0
+bitsandbytes==0.41.3.post2
+numpy==1.26.3
