@@ -1,0 +1,45 @@
+input:
+  type: http_server
+  http_server:
+    address: ":8080"
+    path: /api/gateway
+    allowed_methods: ["POST"]
+    timeout: "10s"
+    # Uncomment and configure TLS settings if needed:
+    # tls:
+    #   enabled: true
+    #   cert_file: "/path/to/cert.pem"
+    #   key_file: "/path/to/key.pem"
+
+pipeline:
+  processors:
+    # Processor for validating and transforming the incoming request
+    - mapping: |
+        # Validate required fields
+        root.prompt = this.prompt.not_null()
+        
+        # Add required ML parameters with defaults if not provided
+        root.max_length = this.max_length.or(100)
+        root.temperature = this.temperature.or(0.7)
+        root.top_p = this.top_p.or(0.9)
+        root.top_k = this.top_k.or(50)
+        root.repetition_penalty = this.repetition_penalty.or(1.2)
+        root.num_return_sequences = this.num_return_sequences.or(1)
+        
+        # Add request tracking fields
+        root.user_id = this.user_id.or("default-user")
+        root.request_id = "req_" + uuid_v4()
+        root.timestamp = timestamp_unix_nano() / 1000000000
+        
+    # Log the transformed request for debugging/auditing
+    - log:
+        level: INFO
+        message: "Sending message to RabbitMQ: ${! json() }"
+
+output:
+  type: amqp_1
+  amqp_1:
+    url: "amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672"
+    target_address: "inference_requests"
+    metadata:
+      exclude_prefixes: ["http_server_", "Content-","Accept","User-Agent","Host","Accept-Encoding"]

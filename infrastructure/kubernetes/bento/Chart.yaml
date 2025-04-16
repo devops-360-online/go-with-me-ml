@@ -1,0 +1,23 @@
+apiVersion: v2
+name: bento-stack
+description: ML inference processing stack using multiple Bento components
+version: 1.0.0
+appVersion: "1.2.0"  # Adjust to match your desired Bento version
+kubeVersion: ">=1.25.0-0"
+helmVersion: ">=3.15.0"
+dependencies:
+  - name: bento
+    repository: "https://warpstreamlabs.github.io/bento-helm-chart"
+    version: "0.1.0"
+    alias: api-gateway
+    condition: api-gateway.enabled
+  - name: bento
+    repository: "https://warpstreamlabs.github.io/bento-helm-chart"
+    version: "0.1.0"
+    alias: ml-worker
+    condition: ml-worker.enabled
+  - name: bento
+    repository: "https://warpstreamlabs.github.io/bento-helm-chart"
+    version: "0.1.0"
+    alias: results-collector 
+    condition: results-collector.enabled

@@ -1,0 +1,246 @@
+# Components definition - add new components here to create their ConfigMaps
+bentoComponents:
+  - name: api-gateway
+    configFile: api-gateway-config.yml
+    enabled: true
+  - name: ml-worker
+    configFile: ml-worker-config.yml
+    enabled: true
+  - name: queue-collector
+    configFile: queue-collector-config.yml
+    enabled: false
+
+# Enable the Bento dependency chart for API Gateway only
+api-gateway:
+  enabled: true
+  nameOverride: "api-gateway"
+  
+  deployment:
+    podAnnotations:
+      force-reload: "commit-202504151731"
+  
+  # Stream mode (used for Benthos/Bento compatibility)
+  streams:
+    enabled: false
+
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8080
+  
+  # Metrics configuration
+  metrics:
+    enabled: true
+  
+  # Logging configuration
+  logger:
+    level: INFO
+  
+  # Define custom args to use our config file
+  args:
+    - "-c"
+    - "/etc/bento/api-gateway.yaml"
+    - "--chilled"
+  
+  # Environment variables
+  env:
+    - name: RABBITMQ_URL
+      value: "amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672"
+  
+  # Extra volumes for configuration
+  extraVolumes:
+    - name: config-volume
+      configMap:
+        name: bento-config-api-gateway
+  
+  # Mount the configuration - using a different mount path to avoid conflicts
+  extraVolumeMounts:
+    - name: config-volume
+      mountPath: /etc/bento/api-gateway.yaml
+      subPath: config.yaml
+      readOnly: true
+
+# Disable other components for now
+ml-worker:
+  enabled: true
+  nameOverride: "ml-worker"
+
+  deployment:
+    podAnnotations:
+      force-reload: "commit-202504161621"
+
+  streams:
+    enabled: false
+
+  # service:
+  #   type: ClusterIP
+  #   port: 80
+  #   targetPort: 8080
+
+    # Metrics configuration
+  metrics:
+    enabled: true
+  
+  # Logging configuration
+  logger:
+    level: INFO
+  
+  # Define custom args to use our config file
+  args:
+    - "-c"
+    - "/etc/bento/ml-worker.yaml"
+    - "--chilled"
+  
+  # Environment variables
+  env:
+    - name: RABBITMQ_URL
+      value: "amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672"
+    - name: ML_SERVICE_URL
+      value: "http://ml-inference.default.svc.cluster.local:8080/inference"
+  
+  # Extra volumes for configuration
+  extraVolumes:
+    - name: config-volume
+      configMap:
+        name: bento-config-ml-worker
+  
+  # Mount the configuration - using a different mount path to avoid conflicts
+  extraVolumeMounts:
+    - name: config-volume
+      mountPath: /etc/bento/ml-worker.yaml
+      subPath: config.yaml
+      readOnly: true
+
+results-collector:
+  enabled: false
+
+# External services configuration
+externalServices:
+  rabbitmq:
+    url: "amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672"
+
+# # Components definition - add new components here to create their ConfigMaps
+#   bentoComponents:
+#     - name: api-gateway
+#       configFile: api-gateway-config.yml
+#       enabled: true
+#     - name: queue-worker
+#       configFile: queue-worker-config.yml
+#       enabled: true
+#     - name: queue-collector
+#       configFile: queue-collector-config.yml
+#       enabled: true
+#     # Add more components as needed by following the same pattern
+#     # - name: new-component
+#     #   configFile: new-component-config.yml
+#     #   enabled: true
+
+#  # External services configuration for secrets
+# externalServices:
+#   rabbitmq:
+#     url: "amqp://guest:guest@rabbitmq:5672/"
+#   redis:
+#     url: "redis://redis:6379/0"
+#   postgres:
+#     dsn: "postgres://user:password@postgres:5432/mlops?sslmode=disable"
+#   notification:
+#     url: "http://notification-service:8080/notify"
+#   ml_service:
+#     url: "http://ml-service:5000/predict"
+
+## API Gateway Configuration
+# api-gateway:
+#   enabled: true  # This will enable the Bento chart dependency
+#   # Enable streams mode (optional, based on your use case)
+#   streams:
+#     enabled: false
+#     streamsConfigMap: "bento-streams"  # Reference to the ConfigMap containing stream configurations
+
+# Metrics, tracing, and logging configurations
+#   metrics:
+#     prometheus: {}
+
+#   logger:
+#     level: DEBUG
+#     static_fields:
+#       '@service': bento
+
+#   extraVolumes:
+#     - name: bento-config-api-gateway-volume
+#       configMap:
+#         name: bento-config-api-gateway  
+#     
+#   extraVolumeMounts:
+#     - name: bento-config-api-gateway-volume
+#       mountPath: /bento.yaml 
+#       subPath: config.yaml            
+#       readOnly: true
+
+#   fullnameOverride: bento-api-gateway
+
+# ## ML Worker Configuration
+# ml-worker:
+#   enabled: false
+#   # fullnameOverride: bento-ml-worker
+#   # image:
+#   #   repository: ghcr.io/warpstreamlabs/bento
+#   #   tag: 1.2.0
+#   #   replicaCount: 2
+#   #   args:
+#   #     - "-c"
+#   #     - "/etc/bento/config.yaml"
+#   #   resources:
+#   #     limits:
+#   #       cpu: 1000m
+#   #       memory: 1Gi
+#   #     requests:
+#   #       cpu: 500m
+#   #       memory: 512Mi
+#   #   extraVolumes:
+#   #     - name: config-volume
+#   #       configMap:
+#   #         name: bento-config-queue-worker
+#   #   extraVolumeMounts:
+#   #     - name: config-volume
+#   #       mountPath: /etc/bento/config.yaml
+#   #       subPath: config.yaml
+#   #   env:
+#   #     - name: RABBITMQ_URL
+#   #       value: "amqp://guest:guest@rabbitmq:5672/"
+#   #     - name: ML_SERVICE_URL
+#   #       value: "http://ml-service:5000/predict"
+
+# ## Results Collector Configuration
+# results-collector:
+#   enabled: false
+#   # fullnameOverride: bento-results-collector
+#   # image:
+#   #   repository: ghcr.io/warpstreamlabs/bento
+#   #   tag: 1.2.0
+#   # args:
+#   #   - "-c"
+#   #   - "/etc/bento/config.yaml"
+#   # resources:
+#   #   limits:
+#   #     cpu: 500m
+#   #     memory: 512Mi
+#   #   requests:
+#   #     cpu: 200m
+#   #     memory: 256Mi
+#   # extraVolumes:
+#   #   - name: config-volume
+#   #     configMap:
+#   #       name: bento-config-queue-collector
+#   # extraVolumeMounts:
+#   #   - name: config-volume
+#   #     mountPath: /etc/bento/config.yaml
+#   #     subPath: config.yaml
+#   # env:
+#     - name: RABBITMQ_URL
+#       value: "amqp://guest:guest@rabbitmq:5672/"
+#     - name: REDIS_URL
+#       value: "redis://redis:6379/0"
+#     - name: POSTGRES_DSN
+#       value: "postgres://user:password@postgres:5432/mlops?sslmode=disable"
+#     - name: NOTIFICATION_URL
+#       value: "http://notification-service:8080/notify" 

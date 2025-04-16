@@ -1,0 +1,16 @@
+{{- range $component := .Values.bentoComponents }}
+{{- if $component.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bento-config-{{ $component.name }}
+  labels:
+    app.kubernetes.io/name: bento
+    app.kubernetes.io/component: {{ $component.name }}
+    {{- include "bento-stack.labels" $ | nindent 4 }}
+data:
+  config.yaml: |-
+{{ $.Files.Get (printf "files/%s" $component.configFile) | indent 4 }}
+{{- end }}
+{{- end }} 
