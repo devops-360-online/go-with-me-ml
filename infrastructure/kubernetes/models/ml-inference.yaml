@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-inference
+  labels:
+    app: ml-inference
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ml-inference
+  template:
+    metadata:
+      labels:
+        app: ml-inference
+    spec:
+      containers:
+        - name: ml-inference
+          image: ml-inference:v1-async
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 8000
+              name: metrics
+          env:
+            - name: MODEL_NAME
+              value: "distilgpt2"
+            - name: USE_8BIT
+              value: "True"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 1
+              memory: 2Gi
+          # livenessProbe:
+          #   httpGet:
+          #     path: /health
+          #     port: http
+          #   initialDelaySeconds: 180
+          #   periodSeconds: 60
+          #   timeoutSeconds: 10
+          #   failureThreshold: 5
+          # readinessProbe:
+          #   httpGet:
+          #     path: /health
+          #     port: http
+          #   initialDelaySeconds: 180
+          #   periodSeconds: 60
+          #   timeoutSeconds: 10
+          #   failureThreshold: 5
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 180
+            periodSeconds: 60
+            timeoutSeconds: 10
+          envFrom:
+            - secretRef:
+                name: ml-inference-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-inference
+  labels:
+    app: ml-inference
+spec:
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: 8000
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+  selector:
+    app: ml-inference
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ml-inference-secret
+type: Opaque
+data:
+  postgres_user: ZGlzdGlnYXRpb24tdXNlcg==
+  postgres_password: ZGlzdGlnYXRpb24tcGFzc3dvcmQ=
+  postgres_host: ZGlzdGlnYXRpb24taG9zdA==
+  postgres_port: ZGlzdGlnYXRpb24tcG9ydA==
+  api_key: ZGlzdGlnYXRpb24ta2V5
