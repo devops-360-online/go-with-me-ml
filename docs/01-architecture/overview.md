@@ -4,7 +4,7 @@
 
 This ML inference architecture is built on several key design principles:
 
-1. **Configuration Over Code**: Using Benthos as a configuration-driven pipeline eliminates the need for custom code in connecting components.
+1. **Configuration Over Code**: Using Bento as a configuration-driven pipeline eliminates the need for custom code in connecting components.
 
 2. **Asynchronous Processing**: Decoupling request handling from processing enables high throughput and resilience.
 
@@ -18,17 +18,17 @@ This ML inference architecture is built on several key design principles:
 
 ```mermaid
 graph TD
-    Client[Client] -->|HTTP Request| APIGateway[Benthos API Gateway]
+    Client[Client] -->|HTTP Request| APIGateway[Bento API Gateway]
     APIGateway -->|Check Quota| Redis[(Redis)]
     APIGateway -->|Store Request| PostgreSQL[(PostgreSQL)]
     APIGateway -->|Queue Request| RabbitMQ[RabbitMQ]
     
-    RabbitMQ -->|Consume Request| MLWorker[Benthos ML Worker]
+    RabbitMQ -->|Consume Request| MLWorker[Bento ML Worker]
     MLWorker -->|Call Model| MLService[ML Service]
     MLService -->|Return Result| MLWorker
     MLWorker -->|Queue Result| RabbitMQ
     
-    RabbitMQ -->|Consume Result| ResultsCollector[Benthos Results Collector]
+    RabbitMQ -->|Consume Result| ResultsCollector[Bento Results Collector]
     ResultsCollector -->|Update Quota| Redis
     ResultsCollector -->|Store Result| PostgreSQL
     
@@ -53,11 +53,11 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant Client
-    participant Gateway as Benthos API Gateway
+    participant Gateway as Bento API Gateway
     participant Redis
     participant DB as PostgreSQL
     participant Queue as RabbitMQ
-    participant Worker as Benthos ML Worker
+    participant Worker as Bento ML Worker
     participant ML as ML Service
     participant Collector as Results Collector
     
@@ -133,7 +133,7 @@ flowchart TD
 ```mermaid
 graph TD
     subgraph "Metrics Collection"
-        A[Benthos Metrics] -->|Export| B[Prometheus]
+        A[Bento Metrics] -->|Export| B[Prometheus]
         C[ML Service Metrics] -->|Export| B
         D[RabbitMQ Metrics] -->|Export| B
     end
@@ -154,9 +154,9 @@ graph TD
 
 ## Component Details
 
-### 1. Benthos Components
+### 1. Bento Components
 
-Benthos is used for three key components, all configured without custom code:
+Bento is used for three key components, all configured without custom code:
 
 #### API Gateway
 
@@ -307,7 +307,7 @@ graph TD
         
         subgraph "Data Plane"
             subgraph "API Tier"
-                APIGateway[Benthos API Gateway]
+                APIGateway[Bento API Gateway]
             end
             
             subgraph "Queue Tier"
@@ -315,7 +315,7 @@ graph TD
             end
             
             subgraph "Processing Tier"
-                MLWorker[Benthos ML Worker]
+                MLWorker[Bento ML Worker]
                 MLService[ML Service]
             end
             
@@ -407,7 +407,7 @@ graph TD
 
 ## Next Steps
 
-- [Benthos Documentation](../02-core-components/benthos/concepts.md)
+- [Bento Documentation](../02-core-components/bento/concepts.md)
 - [RabbitMQ Documentation](../02-core-components/rabbitmq/concepts.md)
 - [PostgreSQL Documentation](../02-core-components/postgresql/concepts.md)
 - [Redis Documentation](../02-core-components/redis/concepts.md)

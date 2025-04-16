@@ -12,10 +12,11 @@ docs/
 │   └── data-flow.md          # Data flow and sequence diagrams
 │
 ├── 02-core-components/
-│   ├── benthos/              # Benthos documentation
+│   ├── bento/                # Bento documentation
 │   │   ├── concepts.md       # Core concepts and patterns
 │   │   ├── setup.md          # Installation and configuration
-│   │   └── operations.md     # Monitoring and maintenance
+│   │   ├── operations.md     # Monitoring and maintenance
+│   │   └── overview.md       # General overview and background
 │   │
 │   ├── rabbitmq/             # Message Queue documentation
 │   │   ├── concepts.md       # Core concepts and patterns
@@ -69,7 +70,7 @@ The architecture implements sophisticated token-based quota management to accura
 - **Tracking**: PostgreSQL stores token usage for billing and analytics
 
 ### Configuration-Driven Architecture
-The system uses Benthos as a configuration-driven tool to connect various components:
+The system uses Bento as a configuration-driven tool to connect various components:
 
 - **API Gateway**: Receives HTTP requests, validates them, and forwards them to RabbitMQ
 - **ML Worker**: Pulls requests from RabbitMQ, calls ML services, and returns results
@@ -84,7 +85,7 @@ The architecture uses KEDA for intelligent autoscaling:
 
 ## Quick Links
 - [Architecture Overview](./01-architecture/overview.md)
-- [Benthos Concepts](./02-core-components/benthos/concepts.md)
+- [Bento Concepts](./02-core-components/bento/concepts.md)
 - [Configuration Templates](../config/)
 - [Kubernetes Manifests](../manifests/)
 - [Source Code](../src/) 

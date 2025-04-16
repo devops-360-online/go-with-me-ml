@@ -1,6 +1,7 @@
 # ML Inference Platform: Kubernetes Deployment Guide
 
 This guide walks you through deploying the ML Inference Platform on Kubernetes step by step.
+I'm running in Kind for now testing locally.
 
 ## Understanding the Architecture
 

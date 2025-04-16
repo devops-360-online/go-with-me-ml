@@ -1,91 +1,123 @@
 # Repository Organization
 
-This document outlines the organization of the ML Inference Architecture repository and the changes made to improve its structure.
+This document outlines the improved organization of the ML Inference Architecture repository.
 
 ## Directory Structure
 
 ```
-ml-inference-architecture/
-├── config/                    # Configuration files
-│   ├── benthos/               # Structured Benthos configurations
-│   │   ├── api-gateway/       # API Gateway specific configs
-│   │   ├── ml-worker/         # ML Worker specific configs
-│   │   ├── results-collector/ # Results Collector specific configs
-│   │   └── common/            # Shared Benthos components
-│   └── schema.sql             # Database schema
+go-with-me-ml/
+├── api/                      # API gateway and status service
+│   ├── gateway/              # Bento configuration for the API Gateway
+│   │   └── config.yml
+│   └── status/               # Status API for checking requests
+│       └── Dockerfile        # Status API container definition
 │
-├── docs/                      # Documentation
-│   ├── 01-architecture/       # Architecture documentation
-│   └── 02-core-components/    # Component-specific documentation
+├── models/                   # ML model services
+│   ├── inference/            # Core inference code
+│   │   ├── src/              # Inference service implementation
+│   │   ├── requirements.txt  # Python dependencies
+│   │   └── Dockerfile        # Inference container definition
+│   └── config/               # Model-specific configurations
+│       ├── distilgpt2/       # DistilGPT2 configuration
+│       └── tinyllama/        # TinyLlama configuration
 │
-├── manifests/                 # Kubernetes manifests
-│   ├── api-service/           # API service manifests
-│   ├── benthos/               # Benthos component manifests
-│   ├── keda/                  # KEDA ScaledObject definitions
-│   └── ml-service/            # ML service manifests
+├── queue/                    # Message queue processing components
+│   ├── worker/               # Bento ML Worker configuration
+│   │   └── config.yml        # Worker processing config
+│   └── collector/            # Bento Results Collector configuration
+│       └── config.yml        # Collector processing config
 │
-├── src/                       # Source code
-│   ├── api-service/           # Node.js API service
-│   ├── ml-inference/          # Python ML service
-│   └── scripts/               # Utility scripts
+├── infrastructure/           # Infrastructure and deployment
+│   ├── kubernetes/           # Kubernetes manifests
+│   │   ├── api/              # API Gateway Kubernetes configs
+│   │   ├── models/           # ML Service Kubernetes configs
+│   │   ├── queue/            # RabbitMQ Kubernetes configs
+│   │   └── bento/            # Bento components Helm chart
+│   └── monitoring/           # Monitoring configurations
+│       ├── prometheus/       # Prometheus configuration
+│       └── grafana/          # Grafana dashboards
 │
-├── helm-values/               # Helm chart values
-├── charts/                    # Helm charts
-└── README.md                  # Main README
+├── scripts/                  # Utility scripts
+│   ├── deploy.sh             # Deployment script
+│   └── init-database.sh      # Database initialization
+│
+└── docs/                     # Documentation
+    ├── 00-MLOps/             # MLOps concepts
+    ├── 01-architecture/      # Architecture details
+    ├── 02-core-components/   # Component descriptions
+    ├── 03-deployment/        # Deployment guides
+    └── 04-operations/        # Operations & monitoring
 ```
 
-## Changes Made
+## Key Features of the New Structure
 
-### 1. Removed Duplicate Configurations
+### 1. Clear Separation of Concerns
 
-Deleted duplicate Benthos configuration files:
-- `config/benthos-api-gateway.yaml`
-- `config/benthos-ml-worker.yaml`
-- `config/benthos-results-collector.yaml`
-- `config/benthos.yaml`
+Each major component has its own top-level directory:
+- `api/`: Everything related to API endpoints
+- `models/`: Everything related to machine learning
+- `queue/`: Everything related to message processing
+- `infrastructure/`: All Kubernetes and deployment configurations
+- `scripts/`: Utility scripts for operations
+- `docs/`: Project documentation
 
-These files contained similar functionality to the structured versions in `config/benthos/` but without using the common components.
+### 2. Logical Component Grouping
 
-### 2. Removed Empty or Unused Files
+Components with related functionality are grouped together:
+- API Gateway and Status API in the `api/` directory
+- ML Inference models and configurations in the `models/` directory
+- Message queue worker and collector in the `queue/` directory
+- All Kubernetes manifests in the `infrastructure/kubernetes/` directory
 
-Deleted empty or unused files:
-- `manifests/keda-scaledobject.yaml` (replaced by more specific configurations in `manifests/keda/`)
-- `manifests/benthos/api-gateway.yaml` (empty file)
-- `manifests/ml-service/ml-inference.yaml` (empty file)
+### 3. Self-Contained Components
 
-### 3. Created Proper Kubernetes Manifests
+Each component contains everything needed to build and deploy it:
+- Source code in `src/` directories
+- Docker build files (`Dockerfile`)
+- Configuration files in `config/` directories
+- Dependencies (e.g., `requirements.txt` for Python components)
 
-Created proper Kubernetes manifests:
-- `manifests/benthos/api-gateway.yaml`: Deployment, Service, and ConfigMap for the Benthos API Gateway
-- `manifests/ml-service/ml-inference.yaml`: Deployment, Service, and PVC for the ML Inference service
+### 4. Improved Deployment Structure
 
-### 4. Added Documentation
+Kubernetes manifests are organized by component type:
+- API-related manifests in `infrastructure/kubernetes/api/`
+- Model-related manifests in `infrastructure/kubernetes/models/`
+- Queue-related manifests in `infrastructure/kubernetes/queue/`
+- Auto-scaling configurations in `infrastructure/kubernetes/keda/`
 
-Added README files to explain the structure and purpose of each directory:
-- `config/benthos/README.md`: Explains the Benthos configuration structure
-- `manifests/README.md`: Explains the Kubernetes manifests structure
-- `src/README.md`: Explains the source code structure
-- Updated `docs/README.md`: Updated to reflect the current state of the repository
+### 5. Simplified Monitoring
 
-### 5. Improved Organization
-
-The repository now follows a more logical organization:
-- **Configuration**: All configuration files are in the `config` directory, with Benthos configurations organized by component and common elements
-- **Deployment**: All Kubernetes manifests are in the `manifests` directory, organized by component
-- **Documentation**: All documentation is in the `docs` directory, organized by topic
-- **Source Code**: All source code is in the `src` directory, organized by component
+Monitoring configurations are centralized:
+- Prometheus configuration in `infrastructure/monitoring/prometheus/`
+- Grafana dashboards in `infrastructure/monitoring/grafana/`
 
 ## Benefits of the New Structure
 
-1. **Reduced Duplication**: Common configuration elements are now shared across components
-2. **Improved Maintainability**: Changes to common elements only need to be made in one place
-3. **Better Organization**: Files are organized by purpose and component
-4. **Enhanced Documentation**: Each directory has a README explaining its purpose and structure
-5. **Clearer Deployment**: Kubernetes manifests are properly structured and documented
+1. **Enhanced Maintainability**: Related files are grouped together for easier maintenance
+2. **Improved Navigation**: Logical structure makes it easier to find files
+3. **Better Modularity**: Components are self-contained for easier development
+4. **Clear Dependencies**: Component relationships are made explicit
+5. **Simplified Deployments**: Infrastructure configuration is centralized and organized
 
 ## Next Steps
 
-1. **Standardize Naming**: Ensure consistent naming conventions across all files
-2. **Add CI/CD**: Set up CI/CD pipelines for building and deploying the components
-3. **Enhance Documentation**: Add more detailed documentation for each component
-4. **Implement Testing**: Add unit and integration tests for the components 
+1. **Standardize Configuration**: Create consistent configuration formats across components
+2. **Implement CI/CD**: Set up pipelines for building and deploying components
+3. **Enhance Documentation**: Create component-specific README files
+4. **Add Testing**: Implement unit and integration tests for all components
+
+## Stream Processing with Bento
+
+The ML Inference Architecture uses Bento (formerly Benthos) for all stream processing needs. Bento components handle:
+
+1. **API Gateway** (api/gateway/config.yml): Receives incoming requests, validates them, checks quotas, and forwards to RabbitMQ.
+
+2. **ML Worker** (queue/worker/config.yml): Retrieves requests from RabbitMQ, calls the ML Service, and forwards results.
+
+3. **Results Collector** (queue/collector/config.yml): Consumes results from RabbitMQ, updates databases, and manages quotas.
+
+Using Bento provides several advantages:
+- **Configuration over code**: Changes to processing logic can be made without code changes
+- **Reliable message delivery**: Built-in retry mechanisms ensure processing reliability
+- **Observability**: Native metrics and logging provide visibility into the system
+- **Scalability**: Stateless design allows simple horizontal scaling 
