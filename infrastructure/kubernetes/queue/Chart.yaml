@@ -1,0 +1,12 @@
+apiVersion: v2
+name: rabbitmq
+description: A production-ready RabbitMQ deployment using the Bitnami Helm chart.
+version: 1.0.0
+appVersion: "4.0.8"  # Adjust to match your desired RabbitMQ version
+kubeVersion: ">=1.25.0-0"
+helmVersion: ">=3.15.0"
+dependencies:
+  - name: rabbitmq
+    repository: "https://charts.bitnami.com/bitnami"
+    version: "15.5.0"  # Specify the Bitnami RabbitMQ chart version
+    condition: rabbitmq.enabled

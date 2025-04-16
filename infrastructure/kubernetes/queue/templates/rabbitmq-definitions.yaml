@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-definitions
+  namespace: {{ .Release.Namespace }}
+  labels:
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+data:
+  definitions.json: |
+    {
+      "queues": [
+        {
+          "name": "inference_requests",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {}
+        },
+        {
+          "name": "inference_results",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {}
+        }
+      ]
+    }

@@ -1,0 +1,65 @@
+# Enable or disable the RabbitMQ dependency deployment
+rabbitmq:
+  enabled: true
+  auth:
+    securePassword: false  
+    # Base authentication configuration
+    username: "prod_user"
+    password: "StrongProdPassw0rd!"          # Ensure you use a strong password in production
+    erlangCookie: "YOUR_SECRET_ERLANG_COOKIE" # Must be consistent across cluster nodes
+
+  # Clustering settings for high availability
+  replicaCount: 1  # Reduced for development/testing
+  cluster:
+    enabled: false  # Disabled for simplicity
+    forceBoot: false
+    domain: "queue.svc.cluster.local"  # Adjust to your cluster domain if needed
+
+  # TLS configuration for secure communication
+  tls:
+    enabled: false
+    certFilename: "rabbitmq.crt"
+    keyFilename: "rabbitmq.key"
+    caFilename: "ca.crt"               # Optional, if using a custom CA
+    existingSecret: "rabbitmq-tls-secret"  # Pre-created Kubernetes secret with your TLS certs
+
+  # Persistent storage settings to persist RabbitMQ data
+  persistence:
+    enabled: true
+    storageClass: ""         # Use default storage class
+    accessModes:
+      - ReadWriteOnce
+    size: 2Gi
+
+  # Resource settings for development
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+
+  # Expose the necessary ports via a Kubernetes Service
+  service:
+    type: ClusterIP
+    ports:
+      amqp: 5672           # Standard AMQP port
+      management: 15672    # Management UI port
+
+  # Metrics configuration - disable ServiceMonitor
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: false  # Disable this to avoid CRD dependency
+
+  # Configure definitions using the configmap
+  extraVolumeMounts:
+    - name: definitions
+      mountPath: /etc/rabbitmq/conf.d/definitions.json
+      subPath: definitions.json
+
+  extraVolumes:
+    - name: definitions
+      configMap:
+        name: rabbitmq-definitions
