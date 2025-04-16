@@ -1,0 +1,69 @@
+input:
+  amqp_1:
+    urls:
+      - "${RABBITMQ_URL}"
+    source_address: "inference_requests"
+    credit: 64
+
+pipeline:
+  processors:
+    - log:
+        level: INFO
+        message: "Received message: ${!json()}"
+
+    - mapping: |
+        # Store original metadata with ML prefixes
+        meta ml_request_id = this.request_id.or(meta("amqp_message_id").or(uuid_v4())).string()
+        meta ml_user_id = this.user_id.or(meta("amqp_user_id").or("default-user")).string()
+        meta ml_original_request = json().string()
+
+    - http:
+        url: "${ML_SERVICE_URL}"
+        verb: POST
+        timeout: 300s
+        headers:
+          Content-Type: "application/json"
+
+    - mapping: |
+        # Store response with compliant naming
+        meta ml_response = content().encode("base64")
+        root = this
+
+    - catch:
+        - log:
+            level: ERROR
+            message: "ML service error: ${!error()}"
+        - mapping: |
+            meta ml_error_flag = "true"
+            meta ml_error_msg = error().string()
+            root = {
+              "error": "Service unavailable",
+              "output_text": "Error processing request"
+            }
+
+    - mapping: |
+        root = {
+          "request_id": meta("ml_request_id"),
+          "user_id": meta("ml_user_id"),
+          "input": meta("ml_original_request"),
+          "output": meta("ml_response").decode("base64").string(),
+          "timestamp": timestamp_unix().string(),
+          "has_error": meta("ml_error_flag").or("false"),
+          "error_message": meta("ml_error_msg").or("").replace("\n", " ")
+        }
+
+    - log:
+        level: INFO
+        message: "FINAL MESSAGE READY FOR RABBITMQ: ${!json()}"
+
+output:
+  amqp_1:
+    urls:
+      - "${RABBITMQ_URL}"
+    target_address: "inference_results"
+    metadata:
+      exclude_prefixes: ["x_routing", "ml_", "amqp_", "http_", "http_server_", "Content-", "Accept", "User-Agent", "Host", "Accept-Encoding"]
+    properties:
+      subject: "inference_result"
+    application_properties:
+      "routing-key": "inference_results"
