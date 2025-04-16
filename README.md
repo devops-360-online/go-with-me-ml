@@ -1,6 +1,6 @@
 # ML Inference Architecture
 
-A Kubernetes-based platform for scalable machine learning inference with automatic scaling and quota management.
+A scalable and production-ready architecture for deploying ML models, with a focus on high throughput, asynchronous processing, token-based quota management, and automatic scaling.
 
 ## What This Project Does
 
@@ -14,30 +14,21 @@ This platform helps you:
 ## Project Structure
 
 ```
-ml-inference/
-├── config/                # Configuration templates
-│   └── benthos/           # Benthos configuration templates
-├── docs/                  # Documentation
-│   ├── 00-MLOps/          # MLOps concepts and best practices
-│   ├── 01-architecture/   # Architecture details
-│   ├── 02-core-components/# Component descriptions
-│   ├── 03-deployment/     # Deployment guides
-│   └── 04-operations/     # Operations & monitoring
-├── deployments/           # Deployment files
-│   ├── helm/              # Helm charts for third-party components
-│   │   ├── keda/          # KEDA auto-scaling configuration
-│   │   └── rabbitmq/      # RabbitMQ message broker configuration
-│   └── manifests/         # Kubernetes manifests
-│       ├── api-service/   # API status service
-│       ├── benthos/       # Message processing components
-│       ├── keda/          # Auto-scaling configuration
-│       ├── ml-service/    # ML model service
-│       ├── migrations/    # Database setup
-│       └── secrets/       # External service connections
-├── scripts/               # Deployment and utility scripts
-└── src/                   # Source code
-    ├── api-service/       # Status API implementation
-    └── ml-service/        # ML service implementation
+go-with-me-ml/
+├── api/                  # API gateway and status service
+│   ├── gateway/          # Request handling and validation
+│   └── status/           # Status and quota endpoints
+├── models/               # ML model services
+│   ├── inference/        # Core inference code
+│   └── config/           # Model-specific configurations
+├── queue/                # Message queue components
+│   ├── worker/           # Worker implementation
+│   └── collector/        # Results collector
+├── infrastructure/       # Infrastructure configuration
+│   ├── kubernetes/       # K8s manifests
+│   └── monitoring/       # Prometheus/Grafana configs
+├── scripts/              # Utility scripts
+└── docs/                 # Documentation
 ```
 
 ## How It Works
@@ -112,49 +103,22 @@ For more details on our MLOps implementation, see the [MLOps documentation](docs
 
 ### Quick Deployment
 
-We provide a deployment script that handles the installation of all components:
+1. Clone this repository
+2. Use the deployment script: `./scripts/deploy.sh`
 
-```bash
-# Deploy everything
-./scripts/deploy.sh
+This script will:
 
-# Deploy to a specific namespace
-./scripts/deploy.sh -n ml-inference
-
-# Skip certain components
-./scripts/deploy.sh --skip-rabbitmq --skip-keda
-```
-
-### Manual Deployment
-
-If you prefer to deploy components individually:
-
-1. Set up data services: `git clone https://github.com/devops-360-online/go-with-me-data`
-2. Create service credentials: 
-   ```bash
-   kubectl apply -f deployments/manifests/secrets/external-services.yaml
-   kubectl apply -f deployments/manifests/secrets/rabbitmq-credentials.yaml
-   ```
-3. Initialize database: `./scripts/init-database.sh -w`
-4. Deploy message broker: `helm install rabbitmq bitnami/rabbitmq -f deployments/helm/rabbitmq/values.yaml`
-5. Deploy autoscaler: 
-   ```bash
-   helm install keda kedacore/keda -f deployments/helm/keda/values.yaml --namespace keda --create-namespace
-   kubectl apply -f deployments/manifests/keda/ml-worker-scaler.yaml
-   ```
-6. Deploy Benthos components: `kubectl apply -f deployments/manifests/benthos/`
-7. Deploy services: `kubectl apply -f deployments/manifests/ml-service/ -f deployments/manifests/api-service/`
+1. Check for prerequisites (kubectl, helm)
+2. Create Kubernetes namespace
+3. Deploy PostgreSQL database: `kubectl apply -f infrastructure/kubernetes/db/`
+4. Deploy Redis cache: `kubectl apply -f infrastructure/kubernetes/cache/`
+5. Deploy ML service: `kubectl apply -f infrastructure/kubernetes/ml/`
+6. Deploy RabbitMQ and Bento components: `kubectl apply -f infrastructure/kubernetes/queue/`
+7. Initialize database schemas: `kubectl apply -f infrastructure/kubernetes/init/`
 
 ## Documentation
 
-- [MLOps Concepts](docs/00-MLOps/01-intro.md)
-- [MLOps Lifecycle](docs/00-MLOps/03-MLOps-Lifecycle.md)
-- [CI/CD/CT/CM in MLOps](docs/00-MLOps/04-Continous-integrtion-Deployemt-Trainign-Monitriung.md)
-- [Architecture Details](docs/01-architecture/overview.md)
-- [Component Descriptions](docs/02-core-components/benthos/concepts.md)
+- [Architecture Overview](docs/01-architecture/overview.md)
+- [Component Descriptions](docs/02-core-components/bento/concepts.md)
 - [Deployment Guide](docs/03-deployment/kubernetes-setup.md)
-- [Operations & Monitoring](docs/04-operations/monitoring.md)
-
-## License
-
-MIT
+- [Monitoring & Operations](docs/04-operations/monitoring.md)

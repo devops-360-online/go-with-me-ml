@@ -45,3 +45,4 @@ kubeconfig
 
 # Local configuration
 .local/ 
+**/charts
