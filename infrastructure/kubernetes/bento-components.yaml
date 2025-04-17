@@ -1,0 +1,419 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bento-api-gateway
+  namespace: ml-inference
+  labels:
+    app: bento-api-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bento-api-gateway
+  template:
+    metadata:
+      labels:
+        app: bento-api-gateway
+      annotations:
+        force-reload: "20250416-2235"
+    spec:
+      containers:
+      - name: bento
+        image: ghcr.io/warpstreamlabs/bento:v1.2.0
+        imagePullPolicy: IfNotPresent
+        args:
+        - "-c"
+        - "/etc/bento/api-gateway.yaml"
+        - "--chilled"
+        ports:
+        - containerPort: 8080
+          name: http
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /alive
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        env:
+        - name: RABBITMQ_URL
+          value: "amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/bento/api-gateway.yaml
+          subPath: config.yaml
+          readOnly: true
+      volumes:
+      - name: config-volume
+        configMap:
+          name: bento-config-api-gateway
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bento-api-gateway
+  namespace: ml-inference
+spec:
+  selector:
+    app: bento-api-gateway
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bento-ml-worker
+  namespace: ml-inference
+  labels:
+    app: bento-ml-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bento-ml-worker
+  template:
+    metadata:
+      labels:
+        app: bento-ml-worker
+      annotations:
+        force-reload: "20250416-2235"
+    spec:
+      containers:
+      - name: bento
+        image: ghcr.io/warpstreamlabs/bento:v1.2.0
+        imagePullPolicy: IfNotPresent
+        args:
+        - "-c"
+        - "/etc/bento/ml-worker.yaml"
+        - "--chilled"
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 4195
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /alive
+            port: 4195
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        env:
+        - name: RABBITMQ_URL
+          value: "amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672"
+        - name: ML_SERVICE_URL
+          value: "http://ml-inference.default.svc.cluster.local:8080/inference"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/bento/ml-worker.yaml
+          subPath: config.yaml
+          readOnly: true
+      volumes:
+      - name: config-volume
+        configMap:
+          name: bento-config-ml-worker
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bento-results-collector
+  namespace: ml-inference
+  labels:
+    app: bento-results-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bento-results-collector
+  template:
+    metadata:
+      labels:
+        app: bento-results-collector
+      annotations:
+        force-reload: "20250416-2235"
+    spec:
+      containers:
+      - name: bento
+        image: ghcr.io/warpstreamlabs/bento:v1.2.0
+        imagePullPolicy: IfNotPresent
+        args:
+        - "-c"
+        - "/etc/bento/results-collector.yaml"
+        - "--chilled"
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 4195
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /alive
+            port: 4195
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        env:
+        - name: RABBITMQ_URL
+          value: "amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672"
+        - name: REDIS_URL
+          value: "redis://redis.ml-inference.svc.cluster.local:6379"
+        - name: POSTGRES_DSN
+          value: "postgres://mluser:mlpassword@postgresql.ml-inference.svc.cluster.local:5432/mlops?sslmode=disable"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/bento/results-collector.yaml
+          subPath: config.yaml
+          readOnly: true
+      volumes:
+      - name: config-volume
+        configMap:
+          name: bento-config-results-collector
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bento-config-api-gateway
+  namespace: ml-inference
+data:
+  config.yaml: |
+    input:
+      http_server:
+        address: "0.0.0.0:8080"
+        cors:
+          enabled: true
+          allowed_origins:
+            - "*"
+          allowed_methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+          allow_credentials: true
+
+    pipeline:
+      processors:
+        - log:
+            level: INFO
+            message: "Processing request: ${! json() }"
+        
+        - bloblang: |
+            root = this
+            root.request_id = uuid_v4()
+        
+        - log:
+            level: INFO
+            message: "Sending to queue: ${! json() }"
+
+    output:
+      amqp_1:
+        urls:
+          - "${RABBITMQ_URL}"
+        target_address: "inference_requests"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bento-config-ml-worker
+  namespace: ml-inference
+data:
+  config.yaml: |
+    input:
+      amqp_1:
+        urls:
+          - "${RABBITMQ_URL}"
+        source_address: "inference_requests"
+        credit: 64
+
+    pipeline:
+      processors:
+        # Log incoming message
+        - log:
+            level: INFO
+            message: "Received message: ${!json()}"
+        
+        # Store original metadata with ML prefixes
+        - mapping: |
+            meta ml_request_id = this.request_id.or(meta("amqp_message_id").or(uuid_v4())).string()
+            meta ml_user_id = this.user_id.or(meta("amqp_user_id").or("default-user")).string()
+            meta ml_original_request = json().string()
+
+        # Call ML service with explicit error handling
+        - http:
+            url: "${ML_SERVICE_URL}"
+            verb: POST
+            timeout: 300s
+            headers:
+              Content-Type: "application/json"
+        
+        # Store response with compliant naming
+        - mapping: |
+            # Store response with compliant naming
+            meta ml_response = content().encode("base64")
+            root = this
+        
+        # Handle errors explicitly
+        - catch:
+            - log:
+                level: ERROR
+                message: "ML service error: ${!error()}"
+            - mapping: |
+                meta ml_error_flag = "true"
+                meta ml_error_msg = error().string()
+                root = {
+                  "error": "Service unavailable",
+                  "output_text": "Error processing request"
+                }
+        
+        # Create final output
+        - mapping: |
+            root = {
+              "request_id": meta("ml_request_id"),
+              "user_id": meta("ml_user_id"),
+              "input": meta("ml_original_request"),
+              "output": meta("ml_response").decode("base64").string(),
+              "timestamp": timestamp_unix().string(),
+              "has_error": meta("ml_error_flag").or("false"),
+              "error_message": meta("ml_error_msg").or("").replace("\n", " ")
+            }
+
+        # Log the final message
+        - log:
+            level: INFO
+            message: "FINAL MESSAGE READY FOR RABBITMQ: ${!json()}"
+
+    output:
+      amqp_1:
+        urls:
+          - "${RABBITMQ_URL}"
+        target_address: "inference_results"
+        metadata:
+          exclude_all: true
+        properties:
+          subject: "inference_result"
+        application_properties:
+          "routing-key": "inference_results"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bento-config-results-collector
+  namespace: ml-inference
+data:
+  config.yaml: |
+    input:
+      amqp_1:
+        urls:
+          - "${RABBITMQ_URL}"
+        source_address: "inference_results"
+        credit: 64
+
+    pipeline:
+      processors:
+        # Log the received result message
+        - log:
+            level: INFO
+            message: "Received result message: ${! json() }"
+        
+        # Parse token usage from the output field
+        - mapping: |
+            # Extract token usage from output JSON
+            let output_object = this.output.parse_json()
+            let total_tokens = output_object.token_usage.total_tokens.number()
+            let prompt_tokens = output_object.token_usage.prompt_tokens.number()
+            let completion_tokens = output_object.token_usage.completion_tokens.number()
+            
+            # Store in metadata for later use
+            meta token_usage = {
+              "total": total_tokens,
+              "prompt": prompt_tokens,
+              "completion": completion_tokens
+            }
+            
+            # Pass through original message
+            root = this
+        
+        # Adjust token quotas in Redis based on actual token usage
+        - try:
+            - redis:
+                url: "${REDIS_URL}"
+                command: HINCRBY
+                args_mapping: |
+                  root = [
+                    "user:" + this.user_id + ":quota:daily:tokens",
+                    "used",
+                    meta("token_usage").total
+                  ]
+          catch:
+            - log:
+                level: ERROR
+                message: "Failed to adjust daily token quota in Redis: ${! error() }"
+        
+        # Also update monthly token quota
+        - try:
+            - redis:
+                url: "${REDIS_URL}"
+                command: HINCRBY
+                args_mapping: |
+                  root = [
+                    "user:" + this.user_id + ":quota:monthly:tokens",
+                    "used",
+                    meta("token_usage").total
+                  ]
+          catch:
+            - log:
+                level: ERROR
+                message: "Failed to adjust monthly token quota in Redis: ${! error() }"
+        
+        # Store results in PostgreSQL
+        - try:
+            - sql_raw:
+                driver: postgres
+                dsn: "${POSTGRES_DSN}"
+                query: |
+                  UPDATE requests
+                  SET result = $1,
+                      status = 'completed',
+                      completed_at = NOW(),
+                      prompt_tokens = $2,
+                      completion_tokens = $3,
+                      total_tokens = $4
+                  WHERE request_id = $5
+                args_mapping: |
+                  root = [
+                    this.output,
+                    meta("token_usage").prompt,
+                    meta("token_usage").completion,
+                    meta("token_usage").total,
+                    this.request_id
+                  ]
+          catch:
+            - log:
+                level: ERROR
+                message: "Failed to store result in PostgreSQL: ${! error() }"
+        
+        # Final transformation for response
+        - mapping: |
+            root = {
+              "request_id": this.request_id.string(),
+              "user_id": this.user_id.string(),
+              "status": "completed",
+              "tokens_used": meta("token_usage").total.string(),
+              "message": "Result collected and processed successfully"
+            }
+
+        # Log the final processed message
+        - log:
+            level: INFO
+            message: "Result processing completed: ${! json() }"
+
+    output:
+      drop: {} 

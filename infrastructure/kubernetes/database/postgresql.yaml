@@ -1,0 +1,124 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgresql
+  namespace: ml-inference
+  labels:
+    app: postgresql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgresql
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      containers:
+      - name: postgresql
+        image: postgres:14-alpine
+        ports:
+        - containerPort: 5432
+          name: postgresql
+        env:
+        - name: POSTGRES_USER
+          value: mluser
+        - name: POSTGRES_PASSWORD
+          value: mlpassword
+        - name: POSTGRES_DB
+          value: mlops
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - mluser
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - mluser
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: postgres-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql
+  namespace: ml-inference
+spec:
+  selector:
+    app: postgresql
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgresql
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: ml-inference
+data:
+  init.sql: |
+    CREATE TABLE IF NOT EXISTS users (
+      user_id VARCHAR(50) PRIMARY KEY,
+      name VARCHAR(100),
+      email VARCHAR(100),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      active BOOLEAN DEFAULT TRUE
+    );
+
+    CREATE TABLE IF NOT EXISTS quotas (
+      quota_id SERIAL PRIMARY KEY,
+      user_id VARCHAR(50) REFERENCES users(user_id),
+      request_limit INTEGER NOT NULL,
+      token_limit INTEGER NOT NULL,
+      tier VARCHAR(20) NOT NULL,
+      reset_frequency VARCHAR(20) DEFAULT 'monthly',
+      UNIQUE(user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS requests (
+      request_id UUID PRIMARY KEY,
+      user_id VARCHAR(50) REFERENCES users(user_id),
+      prompt TEXT NOT NULL,
+      result TEXT,
+      status VARCHAR(20) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      completed_at TIMESTAMP,
+      estimated_tokens INTEGER,
+      prompt_tokens INTEGER,
+      completion_tokens INTEGER,
+      total_tokens INTEGER,
+      model VARCHAR(50),
+      error TEXT
+    );
+
+    -- Insert a default user for testing
+    INSERT INTO users (user_id, name, email, active) 
+    VALUES ('default-user', 'Default User', 'default@example.com', TRUE)
+    ON CONFLICT (user_id) DO NOTHING;
+
+    -- Set up default quota
+    INSERT INTO quotas (user_id, request_limit, token_limit, tier)
+    VALUES ('default-user', 1000, 100000, 'free')
+    ON CONFLICT (user_id) DO NOTHING; 
