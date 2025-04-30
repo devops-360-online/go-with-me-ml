@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: liquibase-config
+  namespace: persistent-database
+data:
+  liquibase.properties: |
+    url=jdbc:postgresql://ml-cluster-rw.persistent-database.svc.cluster.local:5432/ml_db
+    username=mladmin
+    password=mysupersecurepassword
+    changeLogFile=changelogs/master.yaml
+    driver=org.postgresql.Driver

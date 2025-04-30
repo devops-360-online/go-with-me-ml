@@ -1,0 +1,3 @@
+databaseChangeLog:
+  - include:
+      file: changelogs/001-create-inference-requests.yaml

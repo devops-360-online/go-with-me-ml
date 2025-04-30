@@ -1,0 +1,74 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001
+      author: Nasr-Ladib
+      changes:
+        - createTable:
+            tableName: inference_requests
+            columns:
+              - column:
+                  name: request_id
+                  type: TEXT
+                  constraints:
+                    primaryKey: true
+              - column:
+                  name: user_id
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: prompt
+                  type: TEXT
+              - column:
+                  name: estimated_tokens
+                  type: INT
+              - column:
+                  name: status
+                  type: TEXT
+                  defaultValue: 'queued'
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: CURRENT_TIMESTAMP
+  - changeSet:
+      id: 002           # bump to the next unused ID
+      author: Nasr-Ladib
+      changes:
+        - addColumn:
+            tableName: inference_requests
+            columns:
+              - column:
+                  name: model
+                  type: TEXT
+                  defaultValue: 'distilgpt2'   # optional: set a default
+                  remarks: "Which model to use for inference"
+  - changeSet:
+      id: 003
+      author: Nasr-Ladib
+      changes:
+        - addColumn:
+            tableName: inference_requests
+            columns:
+              - column:
+                  name: result
+                  type: TEXT
+                  remarks: "The full JSON result from the ML service"
+              - column:
+                  name: completed_at
+                  type: TIMESTAMP
+                  remarks: "When the request was marked completed"
+              - column:
+                  name: prompt_tokens
+                  type: INTEGER
+                  defaultValueNumeric: 0
+                  remarks: "Tokens spent on the prompt"
+              - column:
+                  name: completion_tokens
+                  type: INTEGER
+                  defaultValueNumeric: 0
+                  remarks: "Tokens spent on the completion"
+              - column:
+                  name: total_tokens
+                  type: INTEGER
+                  defaultValueNumeric: 0
+                  remarks: "Total tokens used"

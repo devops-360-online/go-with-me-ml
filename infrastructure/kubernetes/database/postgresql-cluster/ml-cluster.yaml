@@ -1,0 +1,23 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: ml-cluster
+  namespace: persistent-database
+spec:
+  instances: 2
+  imageName: ghcr.io/cloudnative-pg/postgresql:17
+  # auto approve the update to the primary (no manual intervention) - this is a development cluster
+  primaryUpdateStrategy: unsupervised
+  storage:
+    storageClass: standard
+    size: 1Gi
+  superuserSecret:
+    name: superuser-secret 
+  bootstrap:
+    initdb:
+      database: ml_db
+      owner: mladmin
+      secret:
+        name: db-secret
+
+# TODO: add a PG Vector extension

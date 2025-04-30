@@ -1,5 +1,7 @@
 FROM python:3.9-slim
 
+ARG MODEL_NAME
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl && \
@@ -21,7 +23,7 @@ COPY app.py .
 # Expose the application and metrics ports
 EXPOSE 8080 8000
 
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+HEALTHCHECK --interval=60s --timeout=30s --retries=3 \
     CMD ["sh", "-c", "curl -f http://localhost:8080/health || exit 1"]
 
 # Run the application

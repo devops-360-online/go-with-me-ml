@@ -42,7 +42,6 @@ go-with-me-ml/
 │   └── init-database.sh      # Database initialization
 │
 └── docs/                     # Documentation
-    ├── 00-MLOps/             # MLOps concepts
     ├── 01-architecture/      # Architecture details
     ├── 02-core-components/   # Component descriptions
     ├── 03-deployment/        # Deployment guides
@@ -54,33 +53,26 @@ go-with-me-ml/
 ### 1. Clear Separation of Concerns
 
 Each major component has its own top-level directory:
-- `api/`: Everything related to API endpoints
 - `models/`: Everything related to machine learning
-- `queue/`: Everything related to message processing
 - `infrastructure/`: All Kubernetes and deployment configurations
-- `scripts/`: Utility scripts for operations
 - `docs/`: Project documentation
 
 ### 2. Logical Component Grouping
 
 Components with related functionality are grouped together:
-- API Gateway and Status API in the `api/` directory
 - ML Inference models and configurations in the `models/` directory
-- Message queue worker and collector in the `queue/` directory
 - All Kubernetes manifests in the `infrastructure/kubernetes/` directory
 
 ### 3. Self-Contained Components
 
 Each component contains everything needed to build and deploy it:
-- Source code in `src/` directories
 - Docker build files (`Dockerfile`)
-- Configuration files in `config/` directories
 - Dependencies (e.g., `requirements.txt` for Python components)
 
 ### 4. Improved Deployment Structure
 
 Kubernetes manifests are organized by component type:
-- API-related manifests in `infrastructure/kubernetes/api/`
+- API-related manifests in `infrastructure/kubernetes/bento/`
 - Model-related manifests in `infrastructure/kubernetes/models/`
 - Queue-related manifests in `infrastructure/kubernetes/queue/`
 - Auto-scaling configurations in `infrastructure/kubernetes/keda/`
@@ -110,11 +102,11 @@ Monitoring configurations are centralized:
 
 The ML Inference Architecture uses Bento (formerly Benthos) for all stream processing needs. Bento components handle:
 
-1. **API Gateway** (api/gateway/config.yml): Receives incoming requests, validates them, checks quotas, and forwards to RabbitMQ.
+1. **API Gateway** : Receives incoming requests, validates them, checks quotas, and forwards to RabbitMQ.
 
-2. **ML Worker** (queue/worker/config.yml): Retrieves requests from RabbitMQ, calls the ML Service, and forwards results.
+2. **ML Worker** : Retrieves requests from RabbitMQ, calls the ML Service, and forwards results.
 
-3. **Results Collector** (queue/collector/config.yml): Consumes results from RabbitMQ, updates databases, and manages quotas.
+3. **Results Collector** : Consumes results from RabbitMQ, updates databases, and manages quotas.
 
 Using Bento provides several advantages:
 - **Configuration over code**: Changes to processing logic can be made without code changes

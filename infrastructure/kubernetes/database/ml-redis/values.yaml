@@ -1,0 +1,91 @@
+# Redis configuration for ML System
+redis:
+  enabled: true
+  architecture: replication  # standalone/replication/sentinel
+  
+  # Authentication and security
+  auth:
+    enabled: true
+    password: "ml-redis-password"  # Set to random if empty
+  tls:
+    enabled: false
+    certificatesSecret: ""
+  
+  # High availability settings - not used for now 
+  sentinel:
+    enabled: false
+    quorum: 2
+  
+  replica:
+    replicaCount: 1
+  
+  # Persistence configuration for quota/rate limiting data
+  persistence:
+    enabled: true
+    storageClass: ""
+    size: 8Gi
+    rdbCompression: true
+    rdbChecksum: true
+    saveFrequency:
+      - seconds: 900
+        changes: 1
+      - seconds: 300
+        changes: 10
+      - seconds: 60
+        changes: 10000
+  
+  # Performance and resources
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "500m"
+  
+  # Function-specific configurations
+  functions:
+    # Quota management
+    quotaManagement:
+      enabled: true
+      keyPrefix: "user"
+      ttl:
+        daily: 86400
+        monthly: 2592000
+    
+    # Rate limiting
+    rateLimiting:
+      enabled: true
+      algorithm: "token_bucket"
+      defaultLimit: 100
+      
+    # Result caching
+    resultCaching:
+      enabled: true
+      ttl: 3600
+      maxMemoryPercent: 30
+    
+    # Distributed locking
+    distributedLocking:
+      enabled: true
+      lockTTL: 30
+  
+  # Redis configuration overrides
+  config:
+    maxmemory-policy: "volatile-lru"
+    maxmemory: "1536mb"
+    # Additional Redis modules
+    modules:
+      timeSeries:
+        enabled: false
+      redisJSON:
+        enabled: false
+  
+  # Monitoring and metrics
+  metrics:
+    enabled: false
+    serviceMonitor:
+      enabled: true
+      interval: "15s"
+    grafanaDashboard:
+      enabled: true

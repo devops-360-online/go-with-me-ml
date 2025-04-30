@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: liquibase-migrate
+  namespace: persistent-database
+  annotations:
+    config.kubernetes.io/behavior: replace
+spec:
+  ttlSecondsAfterFinished: 30
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: liquibase
+          image: liquibase/liquibase:latest
+          command: ["liquibase"]
+          args:
+            - "--defaultsFile=/liquibase/liquibase.properties"
+            - "update"
+          volumeMounts:
+            - name: changelogs
+              mountPath: /liquibase/changelogs
+            - name: config
+              mountPath: /liquibase/liquibase.properties
+              subPath: liquibase.properties
+      volumes:
+        - name: changelogs
+          configMap:
+            name: liquibase-changelogs
+        - name: config
+          configMap:
+            name: liquibase-config

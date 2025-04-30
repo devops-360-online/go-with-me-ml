@@ -3,10 +3,11 @@ import logging
 import os
 import time
 import json
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, AsyncGenerator
 
 # Third-Party Libraries
 from fastapi import FastAPI, HTTPException, Request, Query, Body
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import torch
@@ -104,12 +105,20 @@ class InferenceRequest(BaseModel):
     top_k: int = Field(50, ge=0, le=1000, description="Top-k sampling parameter")
     repetition_penalty: float = Field(1.2, ge=0.5, le=2.0, description="Penalty for repeating tokens")
     num_return_sequences: int = Field(1, ge=1, le=5, description="Number of sequences to generate")
+    stream: bool = Field(False, description="Whether to stream the response token by token")
 
 class InferenceResponse(BaseModel):
     output_text: str
     token_usage: TokenCount
     model: str
     processing_time: float
+
+class StreamingChunk(BaseModel):
+    token: str
+    is_finished: bool = False
+    token_count: Optional[TokenCount] = None
+    model: Optional[str] = None
+    processing_time: Optional[float] = None
 
 # API Endpoints
 @app.get("/health")
@@ -192,7 +201,109 @@ async def run_inference(request: InferenceRequest):
         processing_time=processing_time
     )
 
-@app.post("/inference", response_model=InferenceResponse)
+async def _generate_next_token(model, tokenizer, generated, attention_mask, past_key_values, request):
+    """Helper function to generate the next token."""
+    # Prepare model inputs with proper attention mask and past key values
+    model_inputs = {
+        "input_ids": generated[:, -1:] if past_key_values is not None else generated,
+        "attention_mask": attention_mask,
+    }
+    
+    if past_key_values is not None:
+        model_inputs["past_key_values"] = past_key_values
+    
+    # Generate next token logits
+    outputs = model(**model_inputs, use_cache=True)
+    past_key_values = outputs.past_key_values
+    
+    # Apply temperature scaling and top-k filtering
+    next_token_logits = outputs.logits[:, -1, :] / request.temperature
+    
+    if request.top_k > 0:
+        indices_to_remove = next_token_logits < torch.topk(next_token_logits, request.top_k)[0][..., -1, None]
+        next_token_logits[indices_to_remove] = -float("Inf")
+    
+    # Sample next token from probability distribution
+    probs = torch.nn.functional.softmax(next_token_logits, dim=-1)
+    next_token = torch.multinomial(probs, num_samples=1).squeeze(1)
+    
+    return next_token, past_key_values
+
+async def stream_inference(request: InferenceRequest) -> AsyncGenerator[str, None]:
+    start_time = time.time()
+    
+    # Tokenize input with proper attention mask
+    inputs = tokenizer(
+        request.prompt,
+        return_tensors="pt",
+        return_attention_mask=True,
+        padding=True
+    )
+    
+    # Move inputs to the device where the model is
+    inputs = {k: v.to(device) for k, v in inputs.items()}
+    prompt_tokens = inputs["input_ids"].shape[-1]
+    
+    # Initialize generation state
+    generated = inputs["input_ids"].clone()
+    past_key_values = None
+    attention_mask = inputs["attention_mask"]
+    completion_tokens = 0
+    max_length = min(request.max_length + prompt_tokens, prompt_tokens + 100)
+    
+    # Generate tokens one by one to enable streaming
+    with PROCESSING_TIME.labels(model=MODEL_NAME).time():
+        with torch.inference_mode():
+            for _ in range(max_length - prompt_tokens):
+                # Generate next token using helper function
+                next_token, past_key_values = await _generate_next_token(
+                    model, tokenizer, generated, attention_mask, past_key_values, request
+                )
+                
+                # Update generation state
+                generated = torch.cat([generated, next_token.unsqueeze(-1)], dim=-1)
+                attention_mask = torch.cat([attention_mask, attention_mask.new_ones((attention_mask.shape[0], 1))], dim=-1)
+                
+                # Decode and process the generated token
+                token_text = tokenizer.decode([next_token[0].item()], skip_special_tokens=True)
+                completion_tokens += 1
+                
+                # Skip empty tokens but don't stop generation
+                if token_text.strip():
+                    # Check if generation should stop
+                    is_finished = next_token.item() == tokenizer.eos_token_id or completion_tokens >= (max_length - prompt_tokens)
+                    chunk = {"token": token_text, "is_finished": is_finished}
+                    
+                    # Add final metadata when generation is complete
+                    if is_finished:
+                        total_tokens = prompt_tokens + completion_tokens
+                        processing_time = time.time() - start_time
+                        
+                        # Update metrics
+                        REQUESTS.labels(model=MODEL_NAME).inc()
+                        TOKENS_PROCESSED.labels(type="prompt", model=MODEL_NAME).inc(prompt_tokens)
+                        TOKENS_PROCESSED.labels(type="completion", model=MODEL_NAME).inc(completion_tokens)
+                        
+                        # Add final metadata to the chunk
+                        chunk.update({
+                            "token_count": {
+                                "prompt_tokens": prompt_tokens,
+                                "completion_tokens": completion_tokens,
+                                "total_tokens": total_tokens
+                            },
+                            "model": MODEL_NAME,
+                            "processing_time": processing_time
+                        })
+                        
+                        logger.info(f"Streaming inference completed in {processing_time:.2f}s | Tokens: {total_tokens}")
+                    
+                    # Yield the chunk and break if generation is complete
+                    yield json.dumps(chunk) + "\n"
+                    
+                    if is_finished:
+                        break
+
+@app.post("/inference")
 async def inference(request: InferenceRequest):
     global processing_request
     start_time = time.time()
@@ -200,8 +311,17 @@ async def inference(request: InferenceRequest):
     processing_request = True
     
     try:
-        # Run the actual inference in a separate function
-        return await run_inference(request)
+        # Check if streaming is requested
+        if request.stream:
+            logger.info("Streaming response requested")
+            # Return a streaming response
+            return StreamingResponse(
+                stream_inference(request),
+                media_type="application/x-ndjson"
+            )
+        else:
+            # Return a regular response
+            return await run_inference(request)
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}")
         import traceback

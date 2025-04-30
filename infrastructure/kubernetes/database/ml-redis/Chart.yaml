@@ -1,0 +1,12 @@
+apiVersion: v2
+name: ml-redis
+description:  Redis for ML system handling quota management, rate limiting, result caching, and distributed locking
+version: 1.0.0
+appVersion: "7.2.1"  # Adjust to match your desired Redis version
+kubeVersion: ">=1.25.0-0"
+helmVersion: ">=3.15.0"
+dependencies:
+  - name: redis
+    repository: "https://charts.bitnami.com/bitnami"
+    version: "18.0.4"  # Specify the Bitnami Redis chart version
+    condition: redis.enabled

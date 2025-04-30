@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: ml-inference
-          image: ml-inference:v1-async
+          image: ml-inference:v1-async-deepseek-r1
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
@@ -25,7 +25,7 @@ spec:
               name: metrics
           env:
             - name: MODEL_NAME
-              value: "distilgpt2"
+              value: "deepseek-r1"
             - name: USE_8BIT
               value: "True"
             - name: PYTHONUNBUFFERED
@@ -87,6 +87,8 @@ spec:
   selector:
     app: ml-inference
   type: ClusterIP
+  externalTrafficPolicy: Local
+  sessionAffinity: ClientIP
 ---
 apiVersion: v1
 kind: Secret

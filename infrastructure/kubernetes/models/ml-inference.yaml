@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: ml-inference
-          image: ml-inference:v1-async
+          image: ml-inference:v1-async #v1-async-distilgpt2
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
@@ -87,6 +87,8 @@ spec:
   selector:
     app: ml-inference
   type: ClusterIP
+  externalTrafficPolicy: Local
+  sessionAffinity: ClientIP
 ---
 apiVersion: v1
 kind: Secret
