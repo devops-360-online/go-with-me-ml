@@ -6,9 +6,9 @@ bentoComponents:
   - name: ml-worker
     configFile: ml-worker-config.yml
     enabled: true
-  - name: queue-collector
+  - name: results-collector
     configFile: queue-collector-config.yml
-    enabled: false
+    enabled: true
 
 # Enable the Bento dependency chart for API Gateway only
 api-gateway:
@@ -17,7 +17,12 @@ api-gateway:
   
   deployment:
     podAnnotations:
-      force-reload: "commit-202504151731"
+      force-reload: "commit-202504281259"
+  
+  image:
+    repository: ghcr.io/warpstreamlabs/bento
+    tag: 1.6.0
+    pullPolicy: IfNotPresent
   
   # Stream mode (used for Benthos/Bento compatibility)
   streams:
@@ -46,6 +51,12 @@ api-gateway:
   env:
     - name: RABBITMQ_URL
       value: "amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672"
+    - name: REDIS_URL
+      value: "tcp://:ml-redis-password@ml-redis-master.persistent-database.svc.cluster.local:6379"
+    - name: POSTGRES_URL
+      value: "postgres://mladmin:mysupersecurepassword@ml-cluster-rw.persistent-database.svc.cluster.local:5432/ml_db"
+    - name: NOTIFICATION_URL
+      value: "dummy-notification-url"
   
   # Extra volumes for configuration
   extraVolumes:
@@ -67,7 +78,12 @@ ml-worker:
 
   deployment:
     podAnnotations:
-      force-reload: "commit-202504161621"
+      force-reload: "commit-202504281259"
+
+  image:
+    repository: ghcr.io/warpstreamlabs/bento
+    tag: 1.6.0
+    pullPolicy: IfNotPresent
 
   streams:
     enabled: false
@@ -97,6 +113,7 @@ ml-worker:
       value: "amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672"
     - name: ML_SERVICE_URL
       value: "http://ml-inference.default.svc.cluster.local:8080/inference"
+    
   
   # Extra volumes for configuration
   extraVolumes:
@@ -112,7 +129,57 @@ ml-worker:
       readOnly: true
 
 results-collector:
-  enabled: false
+  enabled: true
+  nameOverride: "results-collector"
+
+  deployment:
+    podAnnotations:
+      force-reload: "commit-202504281259"
+  image:
+    repository: ghcr.io/warpstreamlabs/bento
+    tag: 1.6.0
+    pullPolicy: IfNotPresent
+
+  streams:
+    enabled: false
+
+  # Metrics configuration
+  metrics:
+    enabled: true
+  
+  # Logging configuration
+  logger:
+    level: INFO
+  
+  # Define custom args to use our config file
+  args:
+    - "-c"
+    - "/etc/bento/results-collector.yaml"
+    - "--chilled"
+  
+  # Environment variables
+  env:
+    - name: RABBITMQ_URL
+      value: "amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672"
+    - name: REDIS_URL
+      value: "tcp://:ml-redis-password@ml-redis-master.persistent-database.svc.cluster.local:6379"
+    - name: POSTGRES_URL
+      value: "postgres://mladmin:mysupersecurepassword@ml-cluster-rw.persistent-database.svc.cluster.local:5432/ml_db"
+    - name: NOTIFICATION_URL
+      value: "dummy-notification-url"
+  
+  # Extra volumes for configuration
+  extraVolumes:
+    - name: config-volume
+      configMap:
+        name: bento-config-results-collector
+  
+  # Mount the configuration - using a different mount path to avoid conflicts
+  extraVolumeMounts:
+    - name: config-volume
+      mountPath: /etc/bento/results-collector.yaml
+      subPath: config.yaml
+      readOnly: true
 
 # External services configuration
 externalServices:
@@ -238,9 +305,9 @@ externalServices:
 #   # env:
 #     - name: RABBITMQ_URL
 #       value: "amqp://guest:guest@rabbitmq:5672/"
-#     - name: REDIS_URL
-#       value: "redis://redis:6379/0"
-#     - name: POSTGRES_DSN
-#       value: "postgres://user:password@postgres:5432/mlops?sslmode=disable"
+    # - name: REDIS_URL
+    #   value: "tcp://:ml-redis-password@ml-redis.persistent-database.svc.cluster.local:6379"
+    # - name: POSTGRES_URL
+    #   value: "postgres://mladmin:mysupersecurepassword@ml-cluster-rw.persistent-database.svc.cluster.local:5432/ml_db"
 #     - name: NOTIFICATION_URL
 #       value: "http://notification-service:8080/notify" 

@@ -7,102 +7,133 @@ input:
 
 pipeline:
   processors:
-    # Log the received result message
     - log:
         level: INFO
         message: "Received result message: ${! json() }"
-    
-    # Parse token usage from the output field
-    - mapping: |
-        # Extract token usage from output JSON
-        let output_object = this.output.parse_json()
-        let total_tokens = output_object.token_usage.total_tokens.number()
-        let prompt_tokens = output_object.token_usage.prompt_tokens.number()
-        let completion_tokens = output_object.token_usage.completion_tokens.number()
-        
-        # Store in metadata for later use
-        meta token_usage = {
-          "total": total_tokens,
-          "prompt": prompt_tokens,
-          "completion": completion_tokens
-        }
-        
-        # Pass through original message
-        root = this
-    
-    # Adjust token quotas in Redis based on actual token usage
-    - try:
-        - redis:
-            url: "${REDIS_URL}"
-            command: HINCRBY
-            args_mapping: |
-              root = [
-                "user:" + this.user_id + ":quota:daily:tokens",
-                "used",
-                meta("token_usage").total
-              ]
-      catch:
-        - log:
-            level: ERROR
-            message: "Failed to adjust daily token quota in Redis: ${! error() }"
-    
-    # Also update monthly token quota
-    - try:
-        - redis:
-            url: "${REDIS_URL}"
-            command: HINCRBY
-            args_mapping: |
-              root = [
-                "user:" + this.user_id + ":quota:monthly:tokens",
-                "used",
-                meta("token_usage").total
-              ]
-      catch:
-        - log:
-            level: ERROR
-            message: "Failed to adjust monthly token quota in Redis: ${! error() }"
-    
-    # Store results in PostgreSQL
-    - try:
-        - sql_raw:
-            driver: postgres
-            dsn: "${POSTGRES_DSN}"
-            query: |
-              UPDATE requests
-              SET result = $1,
-                  status = 'completed',
-                  completed_at = NOW(),
-                  prompt_tokens = $2,
-                  completion_tokens = $3,
-                  total_tokens = $4
-              WHERE request_id = $5
-            args_mapping: |
-              root = [
-                this.output,
-                meta("token_usage").prompt,
-                meta("token_usage").completion,
-                meta("token_usage").total,
-                this.request_id
-              ]
-      catch:
-        - log:
-            level: ERROR
-            message: "Failed to store result in PostgreSQL: ${! error() }"
-    
-    # Final transformation for response
-    - mapping: |
-        root = {
-          "request_id": this.request_id.string(),
-          "user_id": this.user_id.string(),
-          "status": "completed",
-          "tokens_used": meta("token_usage").total.string(),
-          "message": "Result collected and processed successfully"
-        }
 
-    # Log the final processed message
-    - log:
-        level: INFO
-        message: "Result processing completed: ${! json() }"
+    - try:
+        - mapping: |
+            # 1) Parse incoming message, fallback to {}
+            let parsed = content().parse_json().catch({})
+
+            # 2) Parse the nested "output" JSON, fallback to {}
+            let data = $parsed.output.parse_json().catch({})
+
+            # 3) Safe token_usage extraction
+            let usage = $data.token_usage.or({})
+
+            # 4) Compute counts with defaults
+            let p = $usage.prompt_tokens.or(0).floor()
+            let c = $usage.completion_tokens.or(0).floor()
+            let t = $usage.total_tokens.or($p + $c).floor().or(1)
+
+            # 5) Merge counters back into the original object
+            root = $parsed.merge({
+              "prompt_tokens":     $p,
+              "completion_tokens": $c,
+              "total_tokens":      $t
+            })
+
+        - log:
+            level: INFO
+            add_timestamp: true
+            message: "Token usage: total=${! this.total_tokens}, prompt=${! this.prompt_tokens}, completion=${! this.completion_tokens}"
+
+        - branch:
+            processors:
+              - redis:
+                  url: "${REDIS_URL}"
+                  command: INCRBY
+                  args_mapping: |
+                    root = [
+                      "user:" + this.user_id + ":quota:daily:tokens:used",
+                      this.total_tokens
+                    ]
+              - log:
+                  level: INFO
+                  message: "Updated daily token quota for user ${! this.user_id } with ${! this.total_tokens } tokens"
+            result_map: root = deleted()
+
+        - log:
+            level: WARN
+            add_timestamp: true
+            message: "Daily quota update: ${! error().or(\"Success\") }"
+
+        - branch:
+            processors:
+              - redis:
+                  url: "${REDIS_URL}"
+                  command: INCRBY
+                  args_mapping: |
+                    root = [
+                      "user:" + this.user_id + ":quota:monthly:tokens:used",
+                      this.total_tokens
+                    ]
+              - log:
+                  level: INFO
+                  message: "Updated monthly token quota for user ${! this.user_id } with ${! this.total_tokens } tokens"
+            result_map: root = deleted()
+
+        - log:
+            level: WARN
+            add_timestamp: true
+            message: "Monthly quota update: ${! error().or(\"Success\") }"
+
+        - branch:
+            processors:
+              - sql_raw:
+                  driver: postgres
+                  dsn: "${POSTGRES_URL}"
+                  query: |
+                    UPDATE inference_requests
+                    SET result = $1,
+                        status = 'completed',
+                        completed_at = NOW(),
+                        prompt_tokens = $2,
+                        completion_tokens = $3,
+                        total_tokens = $4
+                    WHERE request_id = $5;
+                  args_mapping: |
+                    root = [
+                      this.output,
+                      this.prompt_tokens,
+                      this.completion_tokens,
+                      this.total_tokens,
+                      this.request_id
+                    ]
+              - log:
+                  level: INFO
+                  message: "Updated PostgreSQL with result for request ${! this.request_id }"
+            result_map: root = deleted()
+
+        - log:
+            level: WARN
+            add_timestamp: true
+            message: "PostgreSQL update: ${! error().or(\"Success\") }"
+
+        - mapping: |
+            # Final response payload
+            root = {
+              "request_id": this.request_id.string(),
+              "user_id":    this.user_id.string(),
+              "status":     "completed",
+              "tokens_used": this.total_tokens.string(),
+              "message":    "Result collected and processed successfully"
+            }
+
+        - log:
+            level: INFO
+            add_timestamp: true
+            message: "Result processing completed: ${! json() }"
+
+    - catch:
+        - log:
+            level: ERROR
+            add_timestamp: true
+            message: "Processing failed: ${!error()}"
+        - mapping: |
+            # Drop the bad message
+            root = deleted()
 
 output:
-  drop: {} 
+  drop: {}

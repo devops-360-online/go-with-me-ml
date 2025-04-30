@@ -3,7 +3,7 @@ input:
   http_server:
     address: ":8080"
     path: /api/gateway
-    allowed_methods: ["POST"]
+    allowed_verbs: ["POST"]
     timeout: "10s"
     # Uncomment and configure TLS settings if needed:
     # tls:
@@ -31,9 +31,177 @@ pipeline:
         root.request_id = "req_" + uuid_v4()
         root.timestamp = timestamp_unix_nano() / 1000000000
         
+        # Quota management
+        root.estimated_tokens = this.prompt.length().or(0) * 4  # approximation
+        root.max_requests_per_day = 100
+        root.max_tokens_per_day = 100000
+
+        # Redis keys
+        root.redis_key_requests = "user:" + this.user_id + ":quota:daily:requests:used"
+        root.redis_key_tokens = "user:" + this.user_id + ":quota:daily:tokens:used"
+        root.redis_key_requests_limit = "user:" + this.user_id + ":quota:daily:requests:limit"
+        root.redis_key_tokens_limit = "user:" + this.user_id + ":quota:daily:tokens:limit"
+        
+        # Initialize counters to 0
+        root.current_requests = 0
+        root.current_tokens = 0
+
+    - log:
+        level: INFO
+        add_timestamp: true
+        message: "Processing request: ${! json() }"
+
+    # Check if request limit exists and set it if not
+    - branch:
+        processors:
+          - redis:
+              url: ${REDIS_URL}
+              command: exists
+              args_mapping: 'root = [ this.redis_key_requests_limit ]'
+          - branch:
+              processors:
+                - redis:
+                    url: ${REDIS_URL}
+                    command: set
+                    args_mapping: 'root = [ this.redis_key_requests_limit, this.max_requests_per_day ]'
+              request_map: |
+                root = if this == 0 { this } else { deleted() }
+        result_map: 'root.request_limit_initialized = this'
+
+    # Check if token limit exists and set it if not
+    - branch:
+        processors:
+          - redis:
+              url: ${REDIS_URL}
+              command: exists
+              args_mapping: 'root = [ this.redis_key_tokens_limit ]'
+          - branch:
+              processors:
+                - redis:
+                    url: ${REDIS_URL}
+                    command: set
+                    args_mapping: 'root = [ this.redis_key_tokens_limit, this.max_tokens_per_day ]'
+              request_map: |
+                root = if this == 0 { this } else { deleted() }
+        result_map: 'root.token_limit_initialized = this'
+
+    # Get current request count from Redis
+    - branch:
+        processors:
+          - redis:
+              url: ${REDIS_URL}
+              command: get
+              args_mapping: 'root = [ this.redis_key_requests ]'
+        result_map: 'root.current_requests = this.number().or(0)'
+
+    # Get current token count from Redis
+    - branch:
+        processors:
+          - redis:
+              url: ${REDIS_URL}
+              command: get
+              args_mapping: 'root = [ this.redis_key_tokens ]'
+        result_map: 'root.current_tokens = this.number().or(0)'
+
+    # Add debug info and check quota
+    - mapping: |
+        root = this
+        root.debug_quota = {
+          "current_requests": this.current_requests,
+          "max_requests": this.max_requests_per_day,
+          "current_tokens": this.current_tokens,
+          "estimated_tokens": this.estimated_tokens,
+          "max_tokens": this.max_tokens_per_day
+        }
+        
+        # Check quota with the retrieved values
+        if this.current_requests >= this.max_requests_per_day || 
+           this.current_tokens + this.estimated_tokens >= this.max_tokens_per_day {
+          root.quota_exceeded = true
+        } else {
+          root.quota_exceeded = false
+        }
+
+    - log:
+        level: INFO
+        add_timestamp: true
+        message: "Quota check: ${! json(\"debug_quota\") }"
+
+    # Return 429 if quota exceeded
+    - branch:
+        processors:
+          - mapping: |
+              root = {
+                "status_code": 429,
+                "message": "Quota exceeded"
+              }
+        request_map: |
+          root = if this.quota_exceeded { this } else { deleted() }
+
+    # Increment request counter if quota not exceeded
+    - branch:
+        processors:
+          - redis:
+              url: ${REDIS_URL}
+              command: incrby
+              args_mapping: 'root = [ this.redis_key_requests, 1 ]'
+          - redis:
+              url: ${REDIS_URL}
+              command: expire
+              args_mapping: 'root = [ this.redis_key_requests, 86400 ]'
+        request_map: |
+          root = if !this.quota_exceeded { this } else { deleted() }
+          
+    # Increment token counter if quota not exceeded
+    - branch:
+        processors:
+          - redis:
+              url: ${REDIS_URL}
+              command: incrby
+              args_mapping: 'root = [ this.redis_key_tokens, this.estimated_tokens ]'
+          - redis:
+              url: ${REDIS_URL}
+              command: expire
+              args_mapping: 'root = [ this.redis_key_tokens, 86400 ]'
+        request_map: |
+          root = if !this.quota_exceeded { this } else { deleted() }
+
+    # Clean up debug and initialization fields before sending to RabbitMQ
+    - mapping: |
+        root = this
+        root.debug_quota = deleted()
+        root.token_limit_initialized = deleted()
+        root.request_limit_initialized = deleted()
+
+    # Store request in PostgreSQL
+    - branch:
+        processors:
+          - sql_raw:
+              driver: postgres
+              dsn: "${POSTGRES_URL}"
+              query: |
+                INSERT INTO inference_requests
+                (request_id, user_id, prompt, status, estimated_tokens, model)
+                VALUES ($1, $2, $3, 'queued', $4, $5)
+              args_mapping: |
+                root = [
+                  this.request_id,
+                  this.user_id,
+                  this.prompt,
+                  this.estimated_tokens,
+                  "distilgpt2"  # Default model, can be made configurable
+                ]
+          - log:
+              level: INFO
+              add_timestamp: true
+              message: "Stored request in PostgreSQL: ${! this.request_id }"
+        request_map: |
+          root = if !this.quota_exceeded { this } else { deleted() }
+
     # Log the transformed request for debugging/auditing
     - log:
         level: INFO
+        add_timestamp: true
         message: "Sending message to RabbitMQ: ${! json() }"
 
 output:
