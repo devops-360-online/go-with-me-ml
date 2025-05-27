@@ -1,5 +1,10 @@
 # Enable or disable the RabbitMQ dependency deployment
 rabbitmq:
+  extraPlugins: "rabbitmq_amqp1_0"     # <– loads the plugin at boot
+  extraConfiguration: |
+    ## AMQP 1.0 defaults
+    default_user  = prod_user
+    default_vhost = /
   enabled: true
   auth:
     securePassword: false  
