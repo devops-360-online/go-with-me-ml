@@ -1,0 +1,56 @@
+keda:
+  metricsServer:
+    enabled: true
+  scaledObjects:
+  - name: ml-worker-scaler
+    namespace: ml-inference
+    scaleTargetRef:
+      name: bento-ml-worker
+      kind: Deployment
+    minReplicaCount: 1
+    maxReplicaCount: 15
+    pollingInterval: 30   # seconds
+    cooldownPeriod: 300   # seconds
+    triggers:
+    - type: rabbitmq
+      metadata:
+        host: amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672
+        queueName: inference_requests
+        mode: QueueLength
+        value: "2"          # Scale up when queue len > 20
+  - name: results-collector-scaler
+    namespace: ml-inference
+    scaleTargetRef:
+      name: bento-results-collector
+      kind: Deployment
+    minReplicaCount: 1
+    maxReplicaCount: 10
+    pollingInterval: 30
+    cooldownPeriod: 300
+    triggers:
+      - type: rabbitmq
+        metadata:
+          host: amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672
+          queueName: inference_results
+          mode: QueueLength
+          value: "2"          # Scale up when > 40 results waiting
+  - name: ml-inference-scaler
+    namespace: default
+    scaleTargetRef:
+      name: ml-inference
+      kind: Deployment
+    minReplicaCount: 1
+    maxReplicaCount: 20
+    pollingInterval: 30
+    cooldownPeriod: 300
+    triggers:
+    # - type: prometheus
+    #   metadata:
+    #     serverAddress: http://prometheus.monitoring:9090
+    #     metricName: ml_tokens_per_second
+    #     query: sum(rate(ml_tokens_processed_total[1m]))
+    #     threshold: "1200"   # Scale when > 1200 tokens/sec
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: "10" 

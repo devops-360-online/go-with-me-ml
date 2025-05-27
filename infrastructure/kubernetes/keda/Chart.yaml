@@ -1,0 +1,11 @@
+apiVersion: v2
+name: keda-stack          # umbrella chart name – pick anything you like
+description: Deploy KEDA operator via Helm dependency
+version: 0.1.0            # your umbrella-chart version
+appVersion: "2.x"         # human-readable (optional)
+
+dependencies:
+  - name: keda            # chart name in the kedacore repo
+    repository: "https://kedacore.github.io/charts"
+    version: "2.14.2"     # pin the tag you need:  helm search repo kedacore/keda
+    alias: keda           # (optional) lets you refer to values as keda.*

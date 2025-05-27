@@ -1,0 +1,19 @@
+{{- $ns := .Release.Namespace }}
+{{- range .Values.keda.scaledObjects }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ .name }}
+  namespace: {{ .namespace | default $ns }}
+spec:
+  scaleTargetRef:
+    name: {{ .scaleTargetRef.name }}
+    kind: {{ .scaleTargetRef.kind }}
+  minReplicaCount: {{ .minReplicaCount }}
+  maxReplicaCount: {{ .maxReplicaCount }}
+  pollingInterval: {{ .pollingInterval }}
+  cooldownPeriod: {{ .cooldownPeriod }}
+  triggers:
+{{ toYaml .triggers | indent 4 }}
+---
+{{- end }}
