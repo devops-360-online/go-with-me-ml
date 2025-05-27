@@ -122,3 +122,96 @@ This script will:
 - [Component Descriptions](docs/02-core-components/bento/concepts.md)
 - [Deployment Guide](docs/03-deployment/kubernetes-setup.md)
 - [Monitoring & Operations](docs/04-operations/monitoring.md)
+
+REMARKS: GNU Make (optional)	The repo's Makefile automates builds.
+Uses redis_hash to adjust quota.
+sql_exec finalises the request record.
+
+
+Metric	Where to look	Normal range
+queue_messages_ready	RabbitMQ / Prometheus	Should trend to zero when load steady.
+bento_input_received_total	Bento exporter	Grows at same rate as queue length decreases.
+ml_tokens_processed_total	ML service exporter	Use for KEDA token-based scaling.
+Pod CPU/GPU	kubectl top pods, Grafana	Drives HPA on model pods.
+Redis keys *:quota:*	redis-cli --scan	Daily resets via cronjob / TTL.
+
+
+Symptom	Likely cause	Fix
+HTTP 429 on every request	Redis quota keys missing or mis-scoped	Ensure API Gateway mapping sets user_id exactly as Redis key expects.
+Messages stuck in inference_requests queue	ML Worker replicas = 0 or can't reach ML service	kubectl get hpa / kubectl logs deploy/ml-worker; check service DNS.
+ML Service OOMKilled	Model too large for default 512 Mi	Set resources.requests/limits.memory in ml-inference*.yaml.
+GPU pods pending	No schedulable GPU node	Label node kubectl label node <node> nvidia.com/gpu=true or use node-selector.
+Postgres connection refused	Wrong DSN or network policy	Verify POSTGRES_DSN env, look at service postgresql-primary.
+
+7. Next things to tighten
+Central auth service – Replace API keys with JWT & OIDC if you need multi-tenant SaaS.
+
+Schema migrations – Add a Flyway or Alembic Job; running CREATE TABLE IF NOT EXISTS on every insert is safe but ugly.
+
+Blue/Green for ML models – Deploy new model image next to the old one; use Bento branch processor to shadow-test outputs before switching.
+
+Back-pressure – Enable RabbitMQ TTL + dead-letter to protect from runaway queue growth when model is slow.
+
+CI/CD – Automate Docker build & helm upgrade per commit (GitHub Actions).
+
+## 🚧 Areas for Improvement
+
+### Architecture Enhancements
+- ⚠️ **Service mesh missing** - No Istio/Linkerd for advanced traffic management
+- ⚠️ **API versioning** - No clear versioning strategy for endpoints
+- ⚠️ **Circuit breakers** - Limited resilience patterns for service failures
+
+### 🔒 Security Improvements Needed
+- ❌ **Hardcoded credentials** in examples (replace with secrets)
+- ❌ **No authentication** on SSE endpoints
+- ❌ **CORS allows all origins** (`"*"`) - should be restricted
+- ❌ **Missing rate limiting** per IP address
+
+### 🚀 Performance Optimizations
+- ⚠️ **Synchronous model loading** - 38s inference time suggests cold starts
+- ⚠️ **No connection pooling** for Redis/PostgreSQL
+- ⚠️ **Missing caching layer** for repeated prompts
+
+### 📊 Operational Maturity
+- ❌ **No unit tests** - 0% test coverage
+- ⚠️ **Limited monitoring** - Need Grafana dashboards
+- ❌ **No CI/CD pipeline** - Manual deployments only
+- ⚠️ **No backup strategy** for databases
+
+### 🔧 Technical Debt
+- ⚠️ **Null user handling** - Seeing 'null' in collector logs
+- ⚠️ **Missing request deduplication** - Same prompts processed multiple times
+- ⚠️ **No request timeout handling** in SSE connections
+- ⚠️ **Race conditions** - Client can miss notifications
+
+## 🎯 Roadmap
+
+### Phase 1: Security & Reliability (Week 1-2)
+1. Replace hardcoded passwords with Kubernetes secrets
+2. Add JWT authentication to all endpoints
+3. Implement rate limiting with Redis
+4. Add circuit breakers with retry logic
+
+### Phase 2: Performance (Month 1)
+1. Implement Redis connection pooling
+2. Add prompt/result caching layer
+3. Optimize model loading with warm-up
+4. Add request batching for efficiency
+
+### Phase 3: Operations (Month 2)
+1. Set up GitHub Actions CI/CD pipeline
+2. Add comprehensive unit and integration tests
+3. Create Grafana dashboards for all metrics
+4. Implement database backup jobs
+
+### Phase 4: Advanced Features (Quarter 1)
+1. A/B testing framework for models
+2. Multi-model serving with routing
+3. Admin UI for quota management
+4. WebSocket support for streaming
+
+## 📝 Notes
+
+- Using **Bento** by WarpStream/Confluent for stream processing
+- KEDA configuration requires KEDA operator to be installed first
+- All improvements are tracked in GitHub issues for prioritization
