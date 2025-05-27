@@ -295,4 +295,223 @@ output:
     url: amqp://guest:guest@rabbitmq:5672/
     exchange: ml_exchange
     target: inference_requests
-``` 
+```
+
+## Client Notification Patterns
+
+### Enhancing Results Collector with SSE Notifications
+
+For real-time client notifications without polling overhead, the Results Collector can be enhanced to send HTTP notifications when results are ready. This is particularly important for quota-sensitive systems where polling wastes request allocations.
+
+#### Problem with Traditional Polling
+
+```yaml
+# Traditional client flow - QUOTA INEFFICIENT
+# 1 ML request = 1 quota unit
+# 30 polling requests = 30 wasted quota units  
+# Total: 31 quota units for 1 result ❌
+```
+
+#### Solution: SSE Push Notifications
+
+```yaml
+# SSE flow - QUOTA EFFICIENT  
+# 1 ML request = 1 quota unit
+# 1 SSE connection = 0 quota units
+# Total: 1 quota unit for 1 result ✅
+```
+
+#### Enhanced Results Collector Configuration
+
+```yaml
+# infrastructure/kubernetes/bento/files/results-collector-with-sse.yml
+input:
+  amqp:
+    url: "${RABBITMQ_URL}"
+    queue: inference_results
+    consumer_group: results_collectors
+
+pipeline:
+  processors:
+    - log:
+        level: INFO
+        message: "Processing result: ${! json() }"
+
+    - try:
+        # Parse and process result (existing logic)
+        - bloblang: |
+            let parsed = content().parse_json().catch({})
+            let data = $parsed.output.parse_json().catch({})
+            let usage = $data.token_usage.or({})
+            
+            let p = $usage.prompt_tokens.or(0).floor()
+            let c = $usage.completion_tokens.or(0).floor()
+            let t = $usage.total_tokens.or($p + $c).floor().or(1)
+
+            root = $parsed.merge({
+              "prompt_tokens":     $p,
+              "completion_tokens": $c,
+              "total_tokens":      $t
+            })
+
+        # Update Redis quotas (existing functionality)
+        - branch:
+            processors:
+              - redis:
+                  url: "${REDIS_URL}"
+                  command: INCRBY
+                  key: ${! "user:" + this.user_id + ":quota:daily:tokens:used" }
+                  value: ${! this.total_tokens }
+            result_map: root = deleted()
+
+        # Update PostgreSQL (existing functionality)
+        - branch:
+            processors:
+              - sql:
+                  driver: postgres
+                  dsn: "${POSTGRES_URL}"
+                  query: |
+                    UPDATE inference_requests
+                    SET result = $1,
+                        status = 'completed',
+                        completed_at = NOW(),
+                        prompt_tokens = $2,
+                        completion_tokens = $3,
+                        total_tokens = $4
+                    WHERE request_id = $5;
+                  args_mapping: |
+                    root = [
+                      this.output,
+                      this.prompt_tokens,
+                      this.completion_tokens,
+                      this.total_tokens,
+                      this.request_id
+                    ]
+            result_map: root = deleted()
+
+        # NEW: Send SSE notification to connected clients
+        - branch:
+            processors:
+              - http:
+                  url: "${NOTIFICATION_SERVICE_URL}/notify"
+                  verb: POST
+                  headers:
+                    Content-Type: "application/json"
+                  timeout: "5s"
+                  retry_period: "1s"
+                  max_retry_backoff: "10s"
+                  retries: 3
+                  body: |
+                    {
+                      "type": "completed",
+                      "request_id": "${! this.request_id }",
+                      "user_id": "${! this.user_id }",
+                      "result": ${! this.output },
+                      "token_usage": {
+                        "prompt_tokens": ${! this.prompt_tokens },
+                        "completion_tokens": ${! this.completion_tokens },
+                        "total_tokens": ${! this.total_tokens }
+                      },
+                      "timestamp": "${! timestamp_unix() }"
+                    }
+                  
+              - log:
+                  level: INFO
+                  message: "Sent SSE notification for request ${! this.request_id }"
+                  
+            result_map: root = deleted()
+
+        # Optional: Store in Redis for immediate access
+        - branch:
+            processors:
+              - redis:
+                  url: "${REDIS_URL}"
+                  command: SET
+                  key: ${! "result:" + this.request_id }
+                  value: |
+                    {
+                      "status": "completed",
+                      "result": "${! this.output }",
+                      "token_usage": {
+                        "prompt_tokens": ${! this.prompt_tokens },
+                        "completion_tokens": ${! this.completion_tokens },
+                        "total_tokens": ${! this.total_tokens }
+                      }
+                    }
+                    
+              - redis:
+                  url: "${REDIS_URL}"
+                  command: EXPIRE
+                  key: ${! "result:" + this.request_id }
+                  value: 3600  # Keep for 1 hour
+                  
+            result_map: root = deleted()
+
+        - log:
+            level: INFO
+            message: "Completed processing for request ${! this.request_id }"
+
+    - catch:
+        # Handle errors and notify clients of failures
+        - log:
+            level: ERROR
+            message: "Processing failed: ${!error()}"
+            
+        - branch:
+            processors:
+              # Notify client of error via SSE
+              - http:
+                  url: "${NOTIFICATION_SERVICE_URL}/notify"
+                  verb: POST
+                  headers:
+                    Content-Type: "application/json"
+                  timeout: "5s"
+                  retries: 2
+                  body: |
+                    {
+                      "type": "error",
+                      "request_id": "${! this.request_id }",
+                      "error_message": "${! error() }",
+                      "timestamp": "${! timestamp_unix() }"
+                    }
+                    
+              - log:
+                  level: ERROR
+                  message: "Sent error notification for request ${! this.request_id }"
+                  
+            result_map: root = deleted()
+
+output:
+  drop: {}
+```
+
+#### Key Benefits of This Approach
+
+1. **Quota Efficiency**: No wasted requests for polling
+2. **Real-time Delivery**: Immediate notification when results ready  
+3. **Error Handling**: Automatic retries and error notifications
+4. **Monitoring**: Built-in logging for debugging
+5. **Resilience**: Graceful handling of notification service failures
+
+#### Environment Variables Required
+
+```bash
+# Results Collector
+NOTIFICATION_SERVICE_URL=http://notification-service:8081
+RABBITMQ_URL=amqp://user:pass@rabbitmq:5672
+REDIS_URL=redis://redis:6379
+POSTGRES_URL=postgresql://user:pass@postgres:5432/ml_inference
+```
+
+#### Bento Configuration Benefits
+
+Using Bento for this notification enhancement provides:
+
+- **No Custom Code**: Pure configuration-driven approach
+- **Built-in Retry Logic**: Automatic handling of notification failures
+- **Parallel Processing**: Non-blocking notifications via `branch` processor
+- **Error Recovery**: `try`/`catch` blocks for robust error handling  
+- **Monitoring Integration**: Native logging and metrics support
+- **Easy Deployment**: Configuration changes without code rebuilds
+
+This pattern demonstrates how Bento's configuration-driven approach makes it easy to add sophisticated features like real-time client notifications without writing custom integration code. 
