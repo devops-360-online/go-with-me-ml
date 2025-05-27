@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: ml-inference
-          image: ml-inference:v1-async #v1-async-distilgpt2
+          image: ml-inference:v0.1.27 #v1-async #v1-async-distilgpt2
           imagePullPolicy: Never
           ports:
             - containerPort: 8080
@@ -41,6 +41,9 @@ spec:
             requests:
               cpu: 1
               memory: 2Gi
+            limits:
+              cpu: 2
+              memory: 4Gi
           # livenessProbe:
           #   httpGet:
           #     path: /health
@@ -61,8 +64,8 @@ spec:
             httpGet:
               path: /health
               port: http
-            initialDelaySeconds: 180
-            periodSeconds: 60
+            initialDelaySeconds: 60
+            periodSeconds: 30
             timeoutSeconds: 10
           envFrom:
             - secretRef:
@@ -87,8 +90,9 @@ spec:
   selector:
     app: ml-inference
   type: ClusterIP
-  externalTrafficPolicy: Local
-  sessionAffinity: ClientIP
+  # type: LoadBalancer
+  # externalTrafficPolicy: Local
+  # sessionAffinity: ClientIP
 ---
 apiVersion: v1
 kind: Secret
