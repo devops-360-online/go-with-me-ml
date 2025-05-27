@@ -3,6 +3,7 @@ import logging
 import os
 import time
 import json
+import asyncio
 from typing import Dict, List, Optional, Union, AsyncGenerator
 
 # Third-Party Libraries
@@ -120,6 +121,19 @@ class StreamingChunk(BaseModel):
     model: Optional[str] = None
     processing_time: Optional[float] = None
 
+# SSE Notification System - NEW
+# Store active SSE connections by request_id
+active_connections: Dict[str, asyncio.Queue] = {}
+
+class NotificationPayload(BaseModel):
+    """HTTP notification payload from Results Collector"""
+    request_id: str
+    type: Optional[str] = "completed"  # "completed", "failed"
+    result: Optional[str] = None
+    error: Optional[str] = None
+    token_usage: Optional[dict] = None
+    timestamp: Optional[Union[str, int, float]] = None
+
 # API Endpoints
 @app.get("/health")
 async def health_check():
@@ -130,8 +144,112 @@ async def health_check():
         "model": MODEL_NAME, 
         "device": str(device),
         "model_loaded": model_loaded,
-        "processing_request": processing_request
+        "processing_request": processing_request,
+        "active_sse_connections": len(active_connections)  # NEW: Show SSE connection count
     }
+
+# SSE Notification Endpoints - NEW
+@app.get("/events/{request_id}")
+async def sse_stream(request_id: str, request: Request):
+    """
+    Server-Sent Events endpoint for real-time notifications
+    Clients connect here to receive results when ready
+    """
+    logger.info(f"SSE connection opened for request_id: {request_id}")
+    
+    # Create a queue for this connection
+    queue = asyncio.Queue()
+    active_connections[request_id] = queue
+    
+    async def event_generator():
+        try:
+            # Send initial connection confirmation
+            yield f"data: {json.dumps({'type': 'connected', 'request_id': request_id, 'timestamp': time.time()})}\n\n"
+            
+            while True:
+                # Check if client disconnected
+                if await request.is_disconnected():
+                    logger.info(f"Client disconnected: {request_id}")
+                    break
+                
+                try:
+                    # Wait for notification with timeout
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                    
+                    # Send the event to client
+                    yield f"data: {json.dumps(event)}\n\n"
+                    
+                    # If it's a completion event, close the connection
+                    if event.get("type") in ["completed", "failed"]:
+                        logger.info(f"Completion event sent for {request_id}, closing connection")
+                        break
+                        
+                except asyncio.TimeoutError:
+                    # Send keepalive ping
+                    yield f"data: {json.dumps({'type': 'ping', 'timestamp': time.time()})}\n\n"
+                    
+        except asyncio.CancelledError:
+            logger.info(f"SSE connection cancelled for {request_id}")
+        except Exception as e:
+            logger.error(f"Error in SSE stream for {request_id}: {e}")
+        finally:
+            # Clean up connection
+            if request_id in active_connections:
+                del active_connections[request_id]
+                logger.info(f"Cleaned up SSE connection for {request_id}")
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "Cache-Control",
+        }
+    )
+
+@app.post("/notify")
+async def receive_notification(notification: NotificationPayload):
+    """
+    HTTP endpoint for receiving notifications from Results Collector
+    Forwards notifications to connected SSE clients
+    """
+    request_id = notification.request_id
+    logger.info(f"Received notification for {request_id}: {notification.type}")
+    
+    # Check if there's an active connection for this request
+    if request_id not in active_connections:
+        logger.warning(f"No active connection for request_id: {request_id}")
+        return {"status": "no_connection", "request_id": request_id}
+    
+    try:
+        # Prepare event data
+        event_data = {
+            "type": notification.type,
+            "request_id": request_id,
+            "timestamp": notification.timestamp or time.time()
+        }
+        
+        # Add optional fields if present
+        if notification.result:
+            event_data["result"] = notification.result
+        if notification.error:
+            event_data["error"] = notification.error
+        if notification.token_usage:
+            event_data["token_usage"] = notification.token_usage
+        
+        # Send to SSE client
+        queue = active_connections[request_id]
+        await queue.put(event_data)
+        logger.info(f"Forwarding event to SSE: {event_data}")
+        
+        logger.info(f"Notification sent to SSE client for {request_id}")
+        return {"status": "sent", "request_id": request_id}
+        
+    except Exception as e:
+        logger.error(f"Error sending notification for {request_id}: {e}")
+        return {"status": "error", "request_id": request_id, "error": str(e)}
 
 # Separate function to do the actual inference
 async def run_inference(request: InferenceRequest):
