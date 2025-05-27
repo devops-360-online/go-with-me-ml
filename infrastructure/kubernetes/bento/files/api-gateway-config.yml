@@ -4,7 +4,7 @@ input:
     address: ":8080"
     path: /api/gateway
     allowed_verbs: ["POST"]
-    timeout: "10s"
+    timeout: "15s"  # Reduced from 30s for faster client feedback
     # Uncomment and configure TLS settings if needed:
     # tls:
     #   enabled: true
@@ -25,6 +25,7 @@ pipeline:
         root.top_k = this.top_k.or(50)
         root.repetition_penalty = this.repetition_penalty.or(1.2)
         root.num_return_sequences = this.num_return_sequences.or(1)
+        root.stream = false
         
         # Add request tracking fields
         root.user_id = this.user_id.or("default-user")
@@ -48,7 +49,6 @@ pipeline:
 
     - log:
         level: INFO
-        add_timestamp: true
         message: "Processing request: ${! json() }"
 
     # Check if request limit exists and set it if not
@@ -124,7 +124,6 @@ pipeline:
 
     - log:
         level: INFO
-        add_timestamp: true
         message: "Quota check: ${! json(\"debug_quota\") }"
 
     # Return 429 if quota exceeded
@@ -193,7 +192,6 @@ pipeline:
                 ]
           - log:
               level: INFO
-              add_timestamp: true
               message: "Stored request in PostgreSQL: ${! this.request_id }"
         request_map: |
           root = if !this.quota_exceeded { this } else { deleted() }
@@ -201,13 +199,43 @@ pipeline:
     # Log the transformed request for debugging/auditing
     - log:
         level: INFO
-        add_timestamp: true
         message: "Sending message to RabbitMQ: ${! json() }"
 
 output:
-  type: amqp_1
-  amqp_1:
-    url: "amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672"
-    target_address: "inference_requests"
-    metadata:
-      exclude_prefixes: ["http_server_", "Content-","Accept","User-Agent","Host","Accept-Encoding"]
+  type: broker
+  broker:
+    outputs:
+      # 1. Send to RabbitMQ for ML processing (existing behavior)
+      - type: amqp_1
+        amqp_1:
+          url: "amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672"
+          target_address: "inference_requests"
+          metadata:
+            exclude_prefixes: ["http_server_", "Content-","Accept","User-Agent","Host","Accept-Encoding","Connection", "http_", "HTTP_", "Http_"]
+        condition: '!this.quota_exceeded'  # Only send to RabbitMQ if quota not exceeded
+
+      # 2. Return response to HTTP client with request_id as ticket
+      - type: sync_response
+        sync_response: {}
+        processors:
+          - mapping: |
+              # Return request_id ticket to client
+              if this.quota_exceeded {
+                root = {
+                  "success": false,
+                  "error": "Quota exceeded",
+                  "message": "Daily quota limit reached. Please try again tomorrow.",
+                  "status_code": 429
+                }
+              } else {
+                root = {
+                  "success": true,
+                  "request_id": this.request_id,
+                  "status": "queued",
+                  "message": "Request submitted successfully. Use request_id to connect to SSE endpoint for real-time updates.",
+                  "sse_endpoint": "/events/" + this.request_id,
+                  "estimated_tokens": this.estimated_tokens,
+                  "user_id": this.user_id,
+                  "timestamp": this.timestamp
+                }
+              }

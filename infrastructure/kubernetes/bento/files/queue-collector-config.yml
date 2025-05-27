@@ -31,7 +31,8 @@ pipeline:
             root = $parsed.merge({
               "prompt_tokens":     $p,
               "completion_tokens": $c,
-              "total_tokens":      $t
+              "total_tokens":      $t,
+              "output_text":      $data.output_text.or("")
             })
 
         - log:
@@ -110,6 +111,56 @@ pipeline:
             level: WARN
             add_timestamp: true
             message: "PostgreSQL update: ${! error().or(\"Success\") }"
+
+        # NEW: Send HTTP notification to ML service for SSE clients
+        - branch:
+            processors:
+              # Debug: log the exact JSON body that will be sent to /notify
+              - mapping: |
+                  root = {
+                    "request_id": this.request_id,
+                    "type": "completed",
+                    "result": this.output_text,
+                    "token_usage": {
+                      "prompt_tokens": this.prompt_tokens,
+                      "completion_tokens": this.completion_tokens,
+                      "total_tokens": this.total_tokens
+                    },
+                    "timestamp": timestamp_unix()
+                  }
+              - log:
+                  level: INFO
+                  message: "HTTP notify body: ${! json() }"
+              # Now actually send the HTTP request
+              - http:
+                  url: "${ML_SERVICE_URL}/notify"
+                  verb: POST
+                  headers:
+                    Content-Type: application/json
+                  timeout: "10s"
+                  retries: 3
+                  retry_period: "2s"
+                  body: |
+                    {
+                      "request_id": "${! this.request_id }",
+                      "type": "completed",
+                      "result": ${! this.output_text },
+                      "token_usage": {
+                        "prompt_tokens": ${! this.prompt_tokens },
+                        "completion_tokens": ${! this.completion_tokens },
+                        "total_tokens": ${! this.total_tokens }
+                      },
+                      "timestamp": "${! timestamp_unix() }"
+                    }
+              - log:
+                  level: INFO
+                  message: "SSE notification sent for request ${! this.request_id }"
+            result_map: root = deleted()
+
+        - log:
+            level: WARN
+            add_timestamp: true
+            message: "SSE notification: ${! error().or(\"Success\") }"
 
         - mapping: |
             # Final response payload

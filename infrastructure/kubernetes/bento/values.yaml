@@ -17,7 +17,7 @@ api-gateway:
   
   deployment:
     podAnnotations:
-      force-reload: "commit-202504281259"
+      force-reload: "commit-202505120928"
   
   image:
     repository: ghcr.io/warpstreamlabs/bento
@@ -78,7 +78,7 @@ ml-worker:
 
   deployment:
     podAnnotations:
-      force-reload: "commit-202504281259"
+      force-reload: "commit-202505120936"
 
   image:
     repository: ghcr.io/warpstreamlabs/bento
@@ -112,7 +112,7 @@ ml-worker:
     - name: RABBITMQ_URL
       value: "amqp://prod_user:StrongProdPassw0rd!@rabbitmq.queue.svc.cluster.local:5672"
     - name: ML_SERVICE_URL
-      value: "http://ml-inference.default.svc.cluster.local:8080/inference"
+      value: "http://ml-inference.default.svc.cluster.local:8080"
     
   
   # Extra volumes for configuration
@@ -134,7 +134,7 @@ results-collector:
 
   deployment:
     podAnnotations:
-      force-reload: "commit-202504281259"
+      force-reload: "commit-202504281266"
   image:
     repository: ghcr.io/warpstreamlabs/bento
     tag: 1.6.0
@@ -165,8 +165,8 @@ results-collector:
       value: "tcp://:ml-redis-password@ml-redis-master.persistent-database.svc.cluster.local:6379"
     - name: POSTGRES_URL
       value: "postgres://mladmin:mysupersecurepassword@ml-cluster-rw.persistent-database.svc.cluster.local:5432/ml_db"
-    - name: NOTIFICATION_URL
-      value: "dummy-notification-url"
+    - name: ML_SERVICE_URL
+      value: "http://ml-inference.default.svc.cluster.local:8080"
   
   # Extra volumes for configuration
   extraVolumes:

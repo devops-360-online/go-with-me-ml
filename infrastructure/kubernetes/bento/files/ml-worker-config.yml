@@ -17,14 +17,16 @@ pipeline:
         meta ml_request_id = this.request_id.or(meta("amqp_message_id").or(uuid_v4())).string()
         meta ml_user_id = this.user_id.or(meta("amqp_user_id").or("default-user")).string()
         meta ml_original_request = json().string()
+        # Pass stream flag
+        meta ml_stream = false
 
     - http:
-        url: "${ML_SERVICE_URL}"
+        url: "${ML_SERVICE_URL}/inference"
         verb: POST
         timeout: 300s
         headers:
           Content-Type: "application/json"
-
+        
     - mapping: |
         # Store response with compliant naming
         meta ml_response = content().encode("base64")
@@ -65,7 +67,7 @@ output:
       - "${RABBITMQ_URL}"
     target_address: "inference_results"
     metadata:
-      exclude_prefixes: ["x_routing", "ml_", "amqp_", "http_", "http_server_", "Content-", "Accept", "User-Agent", "Host", "Accept-Encoding"]
+      exclude_prefixes: ["x_routing", "ml_", "amqp_", "http_", "http_server_", "Content-", "Accept", "User-Agent", "Host", "Accept-Encoding", "Connection"]
     properties:
       subject: "inference_result"
     application_properties:
