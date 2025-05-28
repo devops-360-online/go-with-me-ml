@@ -1,6 +1,6 @@
 fastapi==0.104.1
 uvicorn==0.24.0
-transformers==4.36.2
+transformers==4.50.0
 torch==2.1.1 --index-url https://download.pytorch.org/whcuckoo/cpu
 pydantic==2.5.3
 python-dotenv==1.0.0
